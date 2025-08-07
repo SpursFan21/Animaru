@@ -1,6 +1,6 @@
 //Animaru\src\app\layout.tsx
 
-"use client"; // ← This tells Next.js it's a Client Component
+"use client";
 
 import "~/styles/globals.css";
 
@@ -15,10 +15,6 @@ const geist = Geist({
   subsets: ["latin"],
   variable: "--font-geist-sans",
 });
-
-// Move metadata into a separate Server Component if needed
-// You can't export metadata from a Client Component
-// So remove the metadata export from here and put it in a server file if required
 
 export default function RootLayout({
   children,
