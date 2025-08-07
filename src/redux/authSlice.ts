@@ -1,9 +1,11 @@
 //Animaru\src\redux\authSlice.ts
 
-import { createSlice, PayloadAction } from "@reduxjs/toolkit"
+import { createSlice } from "@reduxjs/toolkit"
+import type { PayloadAction } from "@reduxjs/toolkit"
+import type { User } from "@supabase/supabase-js"
 
 interface AuthState {
-  user: any | null
+  user: User | null
 }
 
 const initialState: AuthState = {
@@ -14,7 +16,7 @@ export const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    setUser: (state, action: PayloadAction<any>) => {
+    setUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload
     },
     clearUser: (state) => {
