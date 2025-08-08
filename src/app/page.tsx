@@ -1,40 +1,57 @@
-//Animaru/src/app/page.tsx
+// Animaru/src/app/page.tsx
 
 import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-ocean text-light">
-      <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
-        <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem] text-accent">
-          Welcome to <span className="text-sky-400">Animaru</span>
+    <main className="bg-blue-950 text-slate-100 min-h-screen">
+      {/* Hero */}
+      <section className="max-w-7xl mx-auto px-4 py-12 text-center">
+        <h1 className="text-5xl font-extrabold mb-4 text-sky-400">
+          Welcome to Animaru
         </h1>
-        <p className="text-lg text-slate-300 max-w-xl text-center">
-          Your gateway to high-quality anime streaming — modern, fast, and powered by serverless tech.
-          Browse, watch, and stay up-to-date with your favorite shows.
+        <p className="text-lg text-slate-300 max-w-2xl mx-auto mb-8">
+          Your gateway to high-quality anime streaming — modern, fast, and
+          powered by serverless tech. Browse, watch, and stay up-to-date with
+          your favorite shows.
         </p>
+        <div className="flex flex-col sm:flex-row justify-center gap-4">
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-8 mt-6">
+           {/*smoke test tailwind css*/}
+          <div className="test-tailwind text-center mt-4">Tailwind is working</div>
+
+
+
+
           <Link
-            className="card hover:bg-blue-800/30"
             href="/login"
+            className="px-6 py-3 bg-sky-500 hover:bg-sky-600 text-white rounded-md font-semibold"
           >
-            <h3 className="text-2xl font-bold text-light">Login →</h3>
-            <p className="text-base text-slate-300">
-              Already have an account? Dive in and start watching.
-            </p>
+            Login →
           </Link>
           <Link
-            className="card hover:bg-blue-800/30"
             href="/register"
+            className="px-6 py-3 bg-blue-900 hover:bg-blue-800 text-white rounded-md font-semibold"
           >
-            <h3 className="text-2xl font-bold text-light">Sign Up →</h3>
-            <p className="text-base text-slate-300">
-              New here? Create an account and join the animeverse.
-            </p>
+            Sign Up →
           </Link>
         </div>
-      </div>
+      </section>
+
+      {/* Trending placeholders */}
+      <section className="max-w-7xl mx-auto px-4 py-10">
+        <h2 className="text-3xl font-bold mb-6">Trending Anime</h2>
+        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-blue-900/60 rounded-lg overflow-hidden shadow-lg h-60 flex items-center justify-center text-slate-400"
+            >
+              Image {i + 1}
+            </div>
+          ))}
+        </div>
+      </section>
     </main>
   );
 }
