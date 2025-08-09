@@ -8,6 +8,7 @@ import { TRPCReactProvider } from "./../trpc/react";
 import { store } from "../redux/store";
 import { Provider } from "react-redux";
 import { Navbar } from "./_components/Navbar";
+import { Footer } from "./_components/Footer";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 
@@ -20,6 +21,7 @@ export default function RootLayout({
         <Provider store={store}>
           <Navbar />
           <TRPCReactProvider>{children}</TRPCReactProvider>
+          <Footer />
         </Provider>
       </body>
     </html>
