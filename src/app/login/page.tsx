@@ -1,5 +1,6 @@
 //Animaru\src\app\login\page.tsx
 
+// Animaru/src/app/login/page.tsx
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -25,20 +26,28 @@ export default function LoginPage() {
     setErr(null);
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    setLoading(false);
+      if (error) throw error;
 
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-    if (data?.user) {
+      // If email confirmation is ON and user hasn't confirmed, session may be null.
+      if (!data.session || !data.user) {
+        setErr("Please confirm your email before logging in.");
+        return;
+      }
+
+      // Update Redux for immediate UI reaction; AuthBootstrap also keeps it in sync on refresh
       dispatch(setUser(data.user));
-      router.push("/");
+
+      // Optional redirect support (e.g., set by a ProtectedRoute)
+      const next = sessionStorage.getItem("redirect-to") || "/";
+      sessionStorage.removeItem("redirect-to");
+      router.push(next);
+    } catch (e: any) {
+      setErr(e?.message || "Login failed. Check your credentials.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -70,6 +79,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
+                  autoComplete="email"
                 />
               </div>
             </label>
@@ -86,6 +96,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"

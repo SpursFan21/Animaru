@@ -22,6 +22,7 @@ export default function RegisterPage() {
   const [showPw2, setShowPw2] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const router = useRouter();
   const dispatch = useDispatch();
@@ -29,29 +30,57 @@ export default function RegisterPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
+    setInfo(null);
 
     if (email !== confirmEmail) return setErr("Emails do not match.");
     if (password !== confirmPassword) return setErr("Passwords do not match.");
     if (password.length < 6) return setErr("Password must be at least 6 characters.");
+    if (!username.trim()) return setErr("Please choose a username.");
 
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { username } },
-    });
-    setLoading(false);
+    try {
+      // 1) Sign up
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${location.origin}/auth/callback`,
+          data: { username }, // stored in user metadata (optional)
+        },
+      });
+      if (error) throw error;
 
-    if (error) {
-      setErr(error.message);
-      return;
-    }
+      // 2) If email confirmation is ON, there's no session yet.
+      if (!data.session || !data.user) {
+        setInfo("Account created. Check your email to confirm your address.");
+        return;
+      }
 
-    if (data?.user) {
+      // 3) We are signed in right away -> set username in profiles table
+      try {
+        const { error: upErr } = await supabase
+          .from("profiles")
+          .update({ username })
+          .eq("id", data.user.id);
+        if (upErr) {
+          // Handle unique constraint or other RLS issues gracefully
+          if (upErr.message?.toLowerCase().includes("unique")) {
+            setErr("That username is taken. You can change it later in Profile.");
+          } else {
+            setErr(upErr.message);
+          }
+        }
+      } catch {
+        // non-fatal for redirect
+      }
+
+      // 4) Update Redux and redirect
       dispatch(setUser(data.user));
       router.push("/");
-    } else {
-      setErr("Registration succeeded but user data is missing.");
+    } catch (e: any) {
+      setErr(e?.message || "Registration failed.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -67,6 +96,11 @@ export default function RegisterPage() {
           {err && (
             <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
               {err}
+            </div>
+          )}
+          {info && (
+            <div className="mb-4 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+              {info}
             </div>
           )}
 
@@ -98,6 +132,7 @@ export default function RegisterPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
+                  autoComplete="email"
                 />
               </div>
             </label>
@@ -114,6 +149,7 @@ export default function RegisterPage() {
                   value={confirmEmail}
                   onChange={(e) => setConfirmEmail(e.target.value)}
                   placeholder="you@example.com"
+                  autoComplete="email"
                 />
               </div>
             </label>
@@ -130,6 +166,8 @@ export default function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
+                  autoComplete="new-password"
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -154,6 +192,8 @@ export default function RegisterPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
+                  autoComplete="new-password"
+                  minLength={6}
                 />
                 <button
                   type="button"

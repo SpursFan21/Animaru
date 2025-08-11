@@ -10,16 +10,27 @@ import { supabase } from "../../utils/supabaseClient";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
 
 export function Navbar() {
   const user = useSelector<RootState, User | null>((s) => s.auth.user);
   const dispatch = useDispatch();
+  const router = useRouter();
+
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    dispatch(clearUser());
-    location.reload();
+    try {
+      setLoggingOut(true);
+      await supabase.auth.signOut();
+      dispatch(clearUser());
+      // Keep it SPA-smooth:
+      router.refresh(); // re-render layouts using client state
+    } finally {
+      setLoggingOut(false);
+      setMenuOpen(false);
+    }
   };
 
   const navLinks = [
@@ -29,6 +40,11 @@ export function Navbar() {
     { name: "Movies", href: "/movies" },
     { name: "Most Popular", href: "/popular" },
   ];
+
+  const displayName =
+    user?.user_metadata?.username ||
+    user?.email?.split("@")[0] ||
+    "Account";
 
   return (
     <nav className="bg-blue-950 text-slate-200 border-b border-blue-900 shadow-md">
@@ -47,12 +63,19 @@ export function Navbar() {
 
           {user ? (
             <>
-              <span className="text-slate-300">Welcome</span>
+              <Link
+                href="/account"
+                className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500 text-slate-200 hover:text-white"
+                title="Account"
+              >
+                {displayName}
+              </Link>
               <button
                 onClick={handleLogout}
-                className="px-4 py-2 bg-blue-600 hover:bg-sky-500 text-white rounded-md"
+                disabled={loggingOut}
+                className="px-4 py-2 bg-blue-600 hover:bg-sky-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-md"
               >
-                Logout
+                {loggingOut ? "Logging out…" : "Logout"}
               </button>
             </>
           ) : (
@@ -99,12 +122,22 @@ export function Navbar() {
             ))}
 
             {user ? (
-              <button
-                onClick={handleLogout}
-                className="w-full px-4 py-2 bg-blue-600 hover:bg-sky-500 text-white rounded-md"
-              >
-                Logout
-              </button>
+              <>
+                <Link
+                  href="/account"
+                  className="w-full px-4 py-2 rounded-md border border-blue-800 text-center hover:border-sky-500"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {displayName}
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-sky-500 disabled:opacity-60 text-white rounded-md"
+                >
+                  {loggingOut ? "Logging out…" : "Logout"}
+                </button>
+              </>
             ) : (
               <>
                 <Link
