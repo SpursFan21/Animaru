@@ -1,7 +1,6 @@
 //Animaru\src\app\auth\callback\page.tsx
 
 "use client";
-
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../utils/supabaseClient";
@@ -10,15 +9,23 @@ export default function AuthCallback() {
   const router = useRouter();
 
   useEffect(() => {
-    // If the session was just established, AuthBootstrap will sync Redux.
-    // We just bounce the user to where they came from or home.
-    const next = sessionStorage.getItem("redirect-to") || "/";
-    sessionStorage.removeItem("redirect-to");
+    let mounted = true;
 
-    // Optionally ensure session is settled before redirect (not strictly required)
-    supabase.auth.getSession().finally(() => {
-      router.replace(next);
-    });
+    const run = async () => {
+      const next = sessionStorage.getItem("redirect-to") ?? "/";
+      sessionStorage.removeItem("redirect-to");
+      try {
+        await supabase.auth.getSession(); // settle session
+      } finally {
+        if (mounted) router.replace(next);
+      }
+    };
+
+    void run();
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   return (

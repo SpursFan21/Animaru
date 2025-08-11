@@ -11,25 +11,36 @@ export default function AuthBootstrap() {
   const dispatch = useDispatch();
 
   useEffect(() => {
-    // 1) Set initial state from any persisted session
-    supabase.auth.getSession().then(({ data }) => {
-      const u = data.session?.user ?? null;
-      if (u) dispatch(setUser(u));
-      else dispatch(clearUser());
-    });
+    let mounted = true;
 
-    // 2) Subscribe to auth changes (sign in, sign out, token refresh)
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const syncInitial = async () => {
+      const { data } = await supabase.auth.getSession();
+      const u = data.session?.user ?? null;
+      if (!mounted) return;
+      if (u) {
+        dispatch(setUser(u));
+      } else {
+        dispatch(clearUser());
+      }
+    };
+
+    // mark intentionally-ignored promise so eslint is happy
+    void syncInitial();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null;
-      if (u) dispatch(setUser(u));
-      else dispatch(clearUser());
+      if (u) {
+        dispatch(setUser(u));
+      } else {
+        dispatch(clearUser());
+      }
     });
 
     return () => {
-      sub.subscription.unsubscribe();
+      mounted = false;
+      listener.subscription.unsubscribe();
     };
   }, [dispatch]);
 
-  // This component just wires state; it renders nothing.
   return null;
 }

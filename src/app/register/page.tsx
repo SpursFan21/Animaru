@@ -45,7 +45,7 @@ export default function RegisterPage() {
         password,
         options: {
           emailRedirectTo: `${location.origin}/auth/callback`,
-          data: { username }, // stored in user metadata (optional)
+          data: { username },
         },
       });
       if (error) throw error;
@@ -63,11 +63,10 @@ export default function RegisterPage() {
           .update({ username })
           .eq("id", data.user.id);
         if (upErr) {
-          // Handle unique constraint or other RLS issues gracefully
           if (upErr.message?.toLowerCase().includes("unique")) {
             setErr("That username is taken. You can change it later in Profile.");
           } else {
-            setErr(upErr.message);
+            setErr(upErr.message ?? "Could not set username (you can change it later).");
           }
         }
       } catch {
@@ -77,8 +76,9 @@ export default function RegisterPage() {
       // 4) Update Redux and redirect
       dispatch(setUser(data.user));
       router.push("/");
-    } catch (e: any) {
-      setErr(e?.message || "Registration failed.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Registration failed.";
+      setErr(msg ?? "Registration failed.");
     } finally {
       setLoading(false);
     }

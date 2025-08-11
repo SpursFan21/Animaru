@@ -12,21 +12,24 @@ import { Menu, X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
+type UserMeta = { username?: string };
+
 export function Navbar() {
-  const user = useSelector<RootState, User | null>((s) => s.auth.user);
   const dispatch = useDispatch();
   const router = useRouter();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // 1) Properly typed selector (no assertion needed)
+  const user = useSelector<RootState, User | null>((s) => s.auth.user);
+
   const handleLogout = async () => {
     try {
       setLoggingOut(true);
       await supabase.auth.signOut();
       dispatch(clearUser());
-      // Keep it SPA-smooth:
-      router.refresh(); // re-render layouts using client state
+      router.refresh();
     } finally {
       setLoggingOut(false);
       setMenuOpen(false);
@@ -41,9 +44,13 @@ export function Navbar() {
     { name: "Most Popular", href: "/popular" },
   ];
 
+  // 2) Safely read username from user_metadata (which is Record<string, unknown>)
+  const meta = (user?.user_metadata ?? {}) as unknown as UserMeta;
+  const usernameFromMeta = typeof meta.username === "string" ? meta.username : undefined;
+
   const displayName =
-    user?.user_metadata?.username ||
-    user?.email?.split("@")[0] ||
+    usernameFromMeta ??
+    (user?.email ? user.email.split("@")[0] : undefined) ??
     "Account";
 
   return (

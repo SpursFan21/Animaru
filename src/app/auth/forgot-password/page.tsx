@@ -13,7 +13,7 @@ export default function ForgotPasswordPage() {
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
-  const handleSend = async (e: React.FormEvent) => {
+    const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     setOk(null);
@@ -24,8 +24,9 @@ export default function ForgotPasswordPage() {
       });
       if (error) throw error;
       setOk("If an account exists for that email, a reset link has been sent.");
-    } catch (e: any) {
-      setErr(e?.message || "Could not send reset link.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Could not send reset link.";
+      setErr(msg ?? "Could not send reset link.");
     } finally {
       setLoading(false);
     }

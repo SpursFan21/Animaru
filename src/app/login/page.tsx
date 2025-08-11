@@ -21,36 +21,33 @@ export default function LoginPage() {
   const router = useRouter();
   const dispatch = useDispatch();
 
-  const handleLogin = async (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     setLoading(true);
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
       if (error) throw error;
 
-      // If email confirmation is ON and user hasn't confirmed, session may be null.
       if (!data.session || !data.user) {
         setErr("Please confirm your email before logging in.");
         return;
       }
 
-      // Update Redux for immediate UI reaction; AuthBootstrap also keeps it in sync on refresh
       dispatch(setUser(data.user));
 
-      // Optional redirect support (e.g., set by a ProtectedRoute)
-      const next = sessionStorage.getItem("redirect-to") || "/";
+      const next = sessionStorage.getItem("redirect-to") ?? "/";
       sessionStorage.removeItem("redirect-to");
       router.push(next);
-    } catch (e: any) {
-      setErr(e?.message || "Login failed. Check your credentials.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Login failed. Check your credentials.";
+      setErr(msg ?? "Login failed. Check your credentials.");
     } finally {
       setLoading(false);
     }
   };
-
+  
   return (
     <div className="min-h-[80vh] flex items-center justify-center bg-blue-950 text-slate-100 px-4">
       <div className="w-full max-w-md">
