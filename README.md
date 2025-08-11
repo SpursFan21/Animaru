@@ -14,7 +14,6 @@ If you are not familiar with the different technologies used in this project, pl
 - [Drizzle](https://orm.drizzle.team)
 - [Tailwind CSS](https://tailwindcss.com)
 - [tRPC](https://trpc.io)
-plus +
 - [Redux](https://redux.js.org/)
 - [Shadcn](https://ui.shadcn.com/)
 
