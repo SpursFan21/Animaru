@@ -16,6 +16,7 @@ If you are not familiar with the different technologies used in this project, pl
 - [tRPC](https://trpc.io)
 - [Redux](https://redux.js.org/)
 - [Shadcn](https://ui.shadcn.com/)
+- [Supabase Auth](https://supabase.com/docs/guides/auth)
 
 ## Learn More
 
