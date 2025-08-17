@@ -70,20 +70,30 @@ export function Navbar() {
 
           {user ? (
             <>
-              <Link
-                href="/account"
-                className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500 text-slate-200 hover:text-white"
-                title="Account"
-              >
-                {displayName}
-              </Link>
-              <button
-                onClick={handleLogout}
-                disabled={loggingOut}
-                className="px-4 py-2 bg-blue-600 hover:bg-sky-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-md"
-              >
-                {loggingOut ? "Logging out…" : "Logout"}
-              </button>
+            <Link
+              href="/watchlists"
+              className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500 text-slate-200 hover:text-white"
+              title="Watchlist"
+            >
+              Watchlists
+            </Link>
+
+            <Link
+              href="/account"
+              className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500 text-slate-200 hover:text-white"
+              title="Account"
+            >
+              {displayName}
+            </Link>
+
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="px-4 py-2 bg-blue-600 hover:bg-sky-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-md"
+            >
+              {loggingOut ? "Logging out…" : "Logout"}
+            </button>
+
             </>
           ) : (
             <>

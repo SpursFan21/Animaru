@@ -1,7 +1,5 @@
 // Animaru/src/app/page.tsx
 
-import Link from "next/link";
-
 export default function Home() {
   return (
     <main className="bg-blue-950 text-slate-100 min-h-screen">
@@ -20,21 +18,6 @@ export default function Home() {
            {/*smoke test tailwind css*/}
           <div className="test-tailwind text-center mt-4">Tailwind is working</div>
 
-
-
-
-          <Link
-            href="/login"
-            className="px-6 py-3 bg-sky-500 hover:bg-sky-600 text-white rounded-md font-semibold"
-          >
-            Login →
-          </Link>
-          <Link
-            href="/register"
-            className="px-6 py-3 bg-blue-900 hover:bg-blue-800 text-white rounded-md font-semibold"
-          >
-            Sign Up →
-          </Link>
         </div>
       </section>
 
