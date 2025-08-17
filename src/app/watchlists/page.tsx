@@ -41,7 +41,7 @@ const TABS: { key: StatusFilter; label: string }[] = [
 
 export default function WatchlistPage() {
   const router = useRouter();
-  const user = useSelector((s: RootState) => s.auth.user) as User | null;
+  const user = useSelector<RootState, User | null>((s) => s.auth.user);
   const userId = user?.id ?? null;
 
   // UI state
