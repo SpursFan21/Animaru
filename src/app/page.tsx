@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../utils/supabaseClient";
+import BannerSlider from "./_components/BannerSlider";
 
 type Anime = {
   id: string;
@@ -59,16 +60,15 @@ export default function Home() {
 
   return (
     <main className="bg-blue-950 text-slate-100 min-h-screen">
-      {/* Hero */}
-      <section className="max-w-7xl mx-auto px-4 py-12 text-center">
-        <h1 className="text-5xl font-extrabold mb-4 text-sky-400">Welcome to Animaru</h1>
-        <p className="text-lg text-slate-300 max-w-2xl mx-auto mb-8">
-          Your gateway to high-quality anime streaming — modern, fast, and powered by serverless tech.
-          Browse, watch, and stay up-to-date with your favorite shows.
-        </p>
 
-        {/* smoke test tailwind css */}
-        <div className="test-tailwind text-center mt-4">Tailwind is working</div>
+      {/* Full-bleed Banner */}
+      <section
+        className="
+          relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw]
+          overflow-hidden
+        "
+      >
+        <BannerSlider />
       </section>
 
       {/* Popular / Trending */}
