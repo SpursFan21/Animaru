@@ -30,6 +30,26 @@ model Profile {
   @@schema("public")
 }
 
+model Anime {
+  id          String    @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  slug        String    @unique
+  title       String
+  synopsis    String?
+  coverPath   String?   @map("cover_path")  
+  bannerPath  String?   @map("banner_path")
+  season      String?                      // e.g. "Winter", "Spring"
+  year        Int?
+  episodes    Int?
+  status      String    @default("ongoing") // keep it simple, can make an enum later
+  genres      String[]  @db.Text
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("anime")
+  @@schema("public")
+}
+
+
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model audit_log_entries {
