@@ -176,7 +176,7 @@ export default function AnimeModal({ open, onClose, anime }: Props) {
 
               {/* Meta chips */}
               <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                {(a.season || a.year) && (
+                {(a.season ?? a.year) && (
                   <span className="rounded bg-blue-900/60 px-2 py-1 border border-blue-800">
                     {(a.season ? `${a.season} ` : "") + (a.year ?? "")}
                   </span>
