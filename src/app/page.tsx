@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../utils/supabaseClient";
 import BannerSlider from "./_components/BannerSlider";
+import AnimeModal, { type AnimeForModal } from "./_components/AnimeModal";
 
 type Anime = {
   id: string;
@@ -17,6 +18,7 @@ type Anime = {
   season: string | null;
   year: number | null;
   updated_at: string | null;
+  // banner_path?: string | null;
 };
 
 function coverUrl(path: string | null | undefined) {
@@ -29,6 +31,10 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  // modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalAnime, setModalAnime] = useState<AnimeForModal | null>(null);
+
   useEffect(() => {
     let mounted = true;
     const run = async () => {
@@ -37,7 +43,10 @@ export default function Home() {
       try {
         const { data, error } = await supabase
           .from("anime")
-          .select("id, slug, title, synopsis, cover_path, genres, season, year, updated_at")
+          .select(
+            "id, slug, title, synopsis, cover_path, genres, season, year, updated_at"
+            // add "banner_path" here if column is added later
+          )
           .order("updated_at", { ascending: false })
           .limit(12);
 
@@ -60,7 +69,6 @@ export default function Home() {
 
   return (
     <main className="bg-blue-950 text-slate-100 min-h-screen">
-
       {/* Full-bleed Banner */}
       <section
         className="
@@ -104,9 +112,26 @@ export default function Home() {
                 const url = coverUrl(a.cover_path);
                 return (
                   <li key={a.id} className="h-full">
-                    <Link
-                      href={`/anime/${a.slug}`}
-                      className="group block h-full rounded-lg overflow-hidden border border-blue-800 bg-blue-900/60 hover:border-sky-500 transition flex flex-col"
+                    {/* Open modal instead of navigating */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const payload: AnimeForModal = {
+                          id: a.id,
+                          slug: a.slug,
+                          title: a.title,
+                          synopsis: a.synopsis,
+                          cover_path: a.cover_path,
+                          // banner_path: a.banner_path ?? null, // uncomment if you add the column
+                          genres: a.genres,
+                          season: a.season,
+                          year: a.year,
+                          episodes: null,
+                        };
+                        setModalAnime(payload);
+                        setModalOpen(true);
+                      }}
+                      className="group block h-full w-full rounded-lg overflow-hidden border border-blue-800 bg-blue-900/60 hover:border-sky-500 transition flex flex-col text-left"
                     >
                       {/* Poster: fixed 2:3 aspect so all cards align */}
                       <div className="relative w-full aspect-[2/3]">
@@ -125,17 +150,13 @@ export default function Home() {
                         )}
                       </div>
 
-                      {/* Title only; fixed block height for equal cards */}
+                      {/* Title only; consistent two-line height */}
                       <div className="p-3">
-                        {/* Two-line clamp (consistent height) */}
                         <h3 className="font-semibold leading-snug line-clamp-2 min-h-[3rem] group-hover:text-sky-300">
                           {a.title}
                         </h3>
-                        {/* If prefer single line, swap the h3 class with:
-                            "font-semibold truncate min-h-[1.5rem] group-hover:text-sky-300"
-                        */}
                       </div>
-                    </Link>
+                    </button>
                   </li>
                 );
               })}
@@ -143,6 +164,14 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {/* Modal */}
+      <AnimeModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        anime={modalAnime}
+      />
     </main>
   );
 }
+

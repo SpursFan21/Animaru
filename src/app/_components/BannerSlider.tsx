@@ -1,8 +1,10 @@
 //src/app/_components/BannerSlider.tsx
 
+// src/app/_components/BannerSlider.tsx
+
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../utils/supabaseClient";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -12,7 +14,16 @@ type Slide = {
   slug: string;
   title: string;
   tagline?: string | null;
-  banner_path: string; // path inside the `banners` bucket
+  banner_path: string | null; // path inside the `banners` bucket (nullable)
+};
+
+type AnimeRow = {
+  id: string;
+  slug: string;
+  title: string;
+  synopsis: string | null;
+  banner_path: string | null;
+  // updated_at is used just for ordering; I don't need to read it
 };
 
 function bannerUrl(path: string | null | undefined) {
@@ -27,29 +38,30 @@ export default function BannerSlider() {
 
   useEffect(() => {
     let mounted = true;
+
     const load = async () => {
-      // You can pull these from `anime` as well; here we expect a banner_path to exist.
       const { data, error } = await supabase
         .from("anime")
-        .select("id, slug, title, synopsis, banner_path")
+        .select("id, slug, title, synopsis, banner_path, updated_at")
         .not("banner_path", "is", null)
         .order("updated_at", { ascending: false })
-        .limit(5);
+        .limit(5)
+        .returns<AnimeRow[]>(); // typed result
 
       if (!mounted) return;
-      if (error) {
+
+      if (error || !data) {
         setSlides([]);
         return;
       }
 
-      const mapped: Slide[] =
-        (data ?? []).map((r) => ({
-          id: r.id,
-          slug: r.slug,
-          title: r.title,
-          tagline: r.synopsis ?? "",
-          banner_path: r.banner_path as string,
-        })) ?? [];
+      const mapped: Slide[] = data.map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        title: r.title,
+        tagline: r.synopsis ?? "",
+        banner_path: r.banner_path, // keep nullable and let bannerUrl handle it
+      }));
 
       setSlides(mapped);
       setIdx(0);
@@ -64,8 +76,16 @@ export default function BannerSlider() {
   // autoplay
   useEffect(() => {
     if (slides.length <= 1) return;
-    timer.current && clearInterval(timer.current);
-    timer.current = setInterval(() => setIdx((i) => (i + 1) % slides.length), 6000);
+
+    if (timer.current) {
+      clearInterval(timer.current);
+    }
+
+    timer.current = setInterval(
+      () => setIdx((i) => (i + 1) % slides.length),
+      6000
+    );
+
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
@@ -114,6 +134,9 @@ export default function BannerSlider() {
       {/* content container aligned with site width */}
       <div className="relative max-w-7xl mx-auto px-4 h-full flex items-center">
         <div className="w-full max-w-2xl pr-6">
+          {/*spacer*/}
+          <div className="my-20" />
+
           <div className="text-xs uppercase tracking-wider text-slate-300/80 mb-2">
             #1 Spotlight
           </div>
