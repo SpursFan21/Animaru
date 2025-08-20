@@ -9,6 +9,7 @@ import type { RootState } from "../../redux/store";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "../../utils/supabaseClient";
 import { Button } from "../../components/ui/button";
+import { ChevronDown } from "lucide-react";
 
 type Status = "watching" | "planned" | "completed" | "dropped";
 type StatusFilter = Status | "all";
@@ -25,10 +26,9 @@ type WatchlistRow = {
   progress_time_seconds: number | null;
   created_at: string | null;
   updated_at: string | null;
-  // Optional extra metadata (use later if these are added to columns)
   genre?: string | null;
   platform?: string | null;
-  release_date?: string | null; // ISO string if you add it later
+  release_date?: string | null;
 };
 
 const TABS: { key: StatusFilter; label: string }[] = [
@@ -50,6 +50,7 @@ export default function WatchlistPage() {
   const [search, setSearch] = useState("");
   const [genreFilter, setGenreFilter] = useState<string>("all");
   const [platformFilter, setPlatformFilter] = useState<string>("all");
+  const [openMenuFor, setOpenMenuFor] = useState<string | null>(null); // anime_id whose dropdown is open
 
   // data state
   const [rows, setRows] = useState<WatchlistRow[]>([]);
@@ -64,6 +65,20 @@ export default function WatchlistPage() {
     }
   }, [user, router]);
 
+  // Close any open dropdown if you click elsewhere
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el) return;
+      // close if the click isn't on a button or menu inside our card actions
+      if (!el.closest?.("[data-card-actions]")) {
+        setOpenMenuFor(null);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
   // Load list
   useEffect(() => {
     if (!userId) return;
@@ -73,8 +88,6 @@ export default function WatchlistPage() {
       setLoading(true);
       setErr(null);
       try {
-        // Base query
-        // NOTE: we only select columns we KNOW exist. (genre/platform/release_date are optional later)
         let q = supabase
           .from("watchlist")
           .select(
@@ -84,11 +97,9 @@ export default function WatchlistPage() {
 
         if (status !== "all") q = q.eq("status", status);
 
-        // Server-side ordering for stable fields
         if (sortBy === "alpha") {
           q = q.order("title", { ascending: true, nullsFirst: true }).order("updated_at", { ascending: false });
         } else {
-          // "recent" default – updated_at desc
           q = q.order("updated_at", { ascending: false });
         }
 
@@ -99,7 +110,7 @@ export default function WatchlistPage() {
         setRows((data ?? []) as WatchlistRow[]);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Failed to load watchlist.";
-        setErr(msg ?? "Failed to load watchlist.");
+        setErr(msg);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -128,7 +139,6 @@ export default function WatchlistPage() {
     return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
   }, [rows]);
 
-  // Counts per tab (computed from loaded rows when on "all")
   const counts = useMemo(() => {
     const base = {
       all: rows.length,
@@ -141,7 +151,7 @@ export default function WatchlistPage() {
     return base;
   }, [rows]);
 
-  // Client filters: search, genre, platform
+  // Client filters
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
 
@@ -154,7 +164,7 @@ export default function WatchlistPage() {
     });
   }, [rows, search, genreFilter, platformFilter]);
 
-  // Client sort for "release" (fall back if you don’t have that column yet)
+  // Sort for "release" (client)
   const visible = useMemo(() => {
     if (sortBy !== "release") return filtered;
 
@@ -162,35 +172,13 @@ export default function WatchlistPage() {
       const da = a.release_date ? Date.parse(a.release_date) : NaN;
       const db = b.release_date ? Date.parse(b.release_date) : NaN;
       if (isNaN(da) && isNaN(db)) return 0;
-      if (isNaN(da)) return 1; // NaNs last
+      if (isNaN(da)) return 1;
       if (isNaN(db)) return -1;
-      return db - da; // newest first
+      return db - da;
     });
   }, [filtered, sortBy]);
 
-  // Helpers (add/update/remove) — call these from item cards or detail pages later
-  async function addToWatchlist(payload: {
-    anime_id: string;
-    title?: string;
-    poster_url?: string;
-    status?: Status;
-  }) {
-    if (!userId) return;
-    const { error } = await supabase.from("watchlist").upsert(
-      [
-        {
-          user_id: userId,
-          anime_id: payload.anime_id,
-          title: payload.title ?? null,
-          poster_url: payload.poster_url ?? null,
-          status: payload.status ?? "planned",
-        },
-      ],
-      { onConflict: "user_id,anime_id" }
-    );
-    if (error) throw error;
-  }
-
+  // Mutations
   async function updateStatus(anime_id: string, next: Status) {
     if (!userId) return;
     const { error } = await supabase
@@ -207,12 +195,24 @@ export default function WatchlistPage() {
     if (error) throw error;
   }
 
+  // Menu action helper
+  const handleMenuAction = async (r: WatchlistRow, action: Status | "remove") => {
+    setOpenMenuFor(null);
+    if (action === "remove") {
+      await removeFromWatchlist(r.anime_id);
+      setRows((prev) => prev.filter((x) => x.anime_id !== r.anime_id));
+      return;
+    }
+    await updateStatus(r.anime_id, action);
+    setRows((prev) => prev.map((x) => (x.anime_id === r.anime_id ? { ...x, status: action } : x)));
+  };
+
   return (
     <div className="min-h-[80vh] bg-blue-950 text-slate-100 px-4 py-6">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-extrabold mb-4">Your Watchlist</h1>
 
-        {/* Tabs (Status) */}
+        {/* Tabs */}
         <div className="flex flex-wrap gap-2 mb-4">
           {TABS.map((t) => {
             const active = status === t.key;
@@ -235,7 +235,7 @@ export default function WatchlistPage() {
           })}
         </div>
 
-        {/* Toolbar: Search, Genre, Platform, Sort */}
+        {/* Toolbar */}
         <div className="mb-4 grid gap-3 md:grid-cols-4">
           <input
             value={search}
@@ -315,54 +315,57 @@ export default function WatchlistPage() {
                     </div>
                   )}
 
-                  <div className="mt-3 flex gap-2">
+                  {/* Single action: Watchlist Status (dropdown) */}
+                  <div className="mt-3 relative" data-card-actions>
                     <Button
-                      className="bg-sky-600 hover:bg-sky-500"
-                      onClick={async () => {
-                        await updateStatus(r.anime_id, "watching");
-                        // optimistic
-                        setRows((prev) =>
-                          prev.map((x) => (x.anime_id === r.anime_id ? { ...x, status: "watching" } : x))
-                        );
-                      }}
+                      className="bg-sky-600 hover:bg-sky-500 w-full justify-between"
+                      onClick={() => setOpenMenuFor((id) => (id === r.anime_id ? null : r.anime_id))}
+                      aria-expanded={openMenuFor === r.anime_id}
+                      aria-haspopup="menu"
                     >
-                      Move to Watching
+                      Watchlist Status
+                      <ChevronDown className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="secondary"
-                      className="border-blue-800"
-                      onClick={async () => {
-                        await removeFromWatchlist(r.anime_id);
-                        // optimistic
-                        setRows((prev) => prev.filter((x) => x.anime_id !== r.anime_id));
-                      }}
-                    >
-                      Remove
-                    </Button>
+
+                    {openMenuFor === r.anime_id && (
+                      <div
+                        role="menu"
+                        className="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-md border border-blue-800 bg-blue-950/95 shadow-xl backdrop-blur"
+                      >
+                        {(
+                          [
+                            { key: "watching", label: "Watching" },
+                            { key: "planned", label: "Plan to Watch" },
+                            { key: "completed", label: "Completed" },
+                            { key: "dropped", label: "Dropped" },
+                          ] as { key: Status; label: string }[]
+                        ).map((opt) => (
+                          <button
+                            key={opt.key}
+                            role="menuitem"
+                            onClick={() => handleMenuAction(r, opt.key)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-800"
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+
+                        <div className="h-px bg-blue-800/70" />
+
+                        <button
+                          role="menuitem"
+                          onClick={() => handleMenuAction(r, "remove")}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-800 text-red-300"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </li>
               ))}
             </ul>
           )}
-        </div>
-
-        {/* Example: add dummy item (replace with real “Add to Watchlist” buttons elsewhere) */}
-        <div className="mt-6">
-          <Button
-            className="bg-sky-600 hover:bg-sky-500"
-            onClick={async () => {
-              await addToWatchlist({
-                anime_id: "demo-123",
-                title: "Demo Anime",
-                poster_url: "",
-                status: "planned",
-              });
-              // quick refresh
-              setSortBy((s) => s);
-            }}
-          >
-            Add Demo Item
-          </Button>
         </div>
       </div>
     </div>
