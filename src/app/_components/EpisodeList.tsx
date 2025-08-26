@@ -3,6 +3,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Image from "next/image";
 
 export type Episode = {
   id: string;
@@ -10,7 +11,7 @@ export type Episode = {
   title: string | null;
   duration_seconds: number | null;
   playback_id: string | null;
-  thumb_path: string | null;
+  thumb_path: string | null; // should be an absolute URL or a path Image loader supports
 };
 
 type Props = {
@@ -18,6 +19,13 @@ type Props = {
   currentId?: string | null;
   onSelect: (ep: Episode) => void;
 };
+
+function formatDuration(s?: number | null) {
+  if (typeof s !== "number" || !Number.isFinite(s) || s < 0) return null;
+  const m = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${m}m ${ss}s`;
+}
 
 export default function EpisodeList({ episodes, currentId, onSelect }: Props) {
   const sorted = useMemo(
@@ -32,6 +40,8 @@ export default function EpisodeList({ episodes, currentId, onSelect }: Props) {
         <ul className="max-h-[70vh] overflow-y-auto pr-1 space-y-2">
           {sorted.map((ep) => {
             const active = ep.id === currentId;
+            const duration = formatDuration(ep.duration_seconds);
+
             return (
               <li key={ep.id}>
                 <button
@@ -43,27 +53,29 @@ export default function EpisodeList({ episodes, currentId, onSelect }: Props) {
                   ].join(" ")}
                   onClick={() => onSelect(ep)}
                 >
-                  {/* thumbnail (optional) */}
-                  <div className="h-12 w-20 rounded-sm bg-blue-950/60 border border-blue-800 overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {/* thumbnail */}
+                  <div className="h-12 w-20 rounded-sm bg-blue-950/60 border border-blue-800 overflow-hidden relative">
                     {ep.thumb_path ? (
-                      <img
+                      <Image
                         src={ep.thumb_path}
                         alt=""
-                        className="h-full w-full object-cover"
+                        fill
+                        sizes="80px"
+                        className="object-cover"
+                        //
+                        // keep unoptimized to avoid Next.js domain checks:
+                        unoptimized
                       />
                     ) : null}
                   </div>
+
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
                       Ep {ep.number}
                       {ep.title ? ` – ${ep.title}` : ""}
                     </div>
-                    {typeof ep.duration_seconds === "number" && (
-                      <div className="text-xs text-slate-400">
-                        {Math.floor(ep.duration_seconds / 60)}m{" "}
-                        {ep.duration_seconds % 60}s
-                      </div>
+                    {duration && (
+                      <div className="text-xs text-slate-400">{duration}</div>
                     )}
                   </div>
                 </button>

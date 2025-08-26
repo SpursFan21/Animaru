@@ -2,36 +2,46 @@
 
 "use client";
 
-import dynamic from "next/dynamic";
-
-const MuxPlayer = dynamic(() => import("@mux/mux-player-react"), { ssr: false });
+import MuxPlayer from "@mux/mux-player-react";
 
 type Props = {
   playbackId: string;
-  poster?: string | null;
   title?: string;
+  poster?: string | null;
+  startTime?: number;          // seconds
   episodeLabel?: string;
+  signedUrl?: string;          // optional signed URL instead of playbackId
 };
 
-export default function AnimePlayer({ playbackId, poster, title, episodeLabel }: Props) {
+export default function AnimePlayer({
+  playbackId,
+  title,
+  poster,
+  startTime,
+  episodeLabel,
+  signedUrl,
+}: Props) {
+  const envKey = process.env.NEXT_PUBLIC_MUX_DATA_ENV_KEY;
+
   return (
-    <div className="w-full aspect-video rounded-xl overflow-hidden border border-blue-800 bg-black">
+    <div className="relative w-full">
       <MuxPlayer
-        playbackId={playbackId}
+        playbackId={signedUrl ? undefined : playbackId}
+        src={signedUrl}
         streamType="on-demand"
-        poster={poster ?? undefined}
         autoPlay={false}
         muted={false}
-        playsInline
-        primaryColor="#38bdf8" // Tailwind sky-400
+        poster={poster ?? undefined}
         metadata={{
-          video_title: title ?? "Anime",
-          viewer_user_id: undefined,
           video_id: playbackId,
-          video_stream_type: "on-demand",
+          video_title: episodeLabel ?? title ?? "",
         }}
-        title={episodeLabel}
-        // Controls are on by default; Mux Player includes settings, quality, PiP, AirPlay, cast where available
+        envKey={envKey}
+        primaryColor="#38bdf8"
+        accentColor="#94a3b8"
+        defaultHiddenCaptions={false}
+        startTime={startTime ?? 0}
+        style={{ aspectRatio: "16 / 9", width: "100%", borderRadius: 12, overflow: "hidden" }}
       />
     </div>
   );

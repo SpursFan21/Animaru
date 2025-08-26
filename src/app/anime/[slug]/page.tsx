@@ -9,7 +9,6 @@ import AnimePlayer from "../../_components/AnimePlayer";
 import EpisodeList from "../../_components/EpisodeList";
 import type { Episode } from "../../_components/EpisodeList";
 
-
 type Anime = {
   id: string;
   slug: string;
@@ -18,6 +17,12 @@ type Anime = {
   banner_path: string | null;
   cover_path: string | null;
 };
+
+// helper to build public storage URLs
+function publicUrl(bucket: "banners" | "covers", path?: string | null) {
+  if (!path) return null;
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
 
 export default function AnimeWatchPage() {
   const params = useParams<{ slug: string }>();
@@ -50,9 +55,7 @@ export default function AnimeWatchPage() {
 
         if (ae) throw ae;
         const a = (animeRows ?? [])[0];
-        if (!a) {
-          throw new Error("Anime not found.");
-        }
+        if (!a) throw new Error("Anime not found.");
         if (!mounted) return;
 
         setAnime(a);
@@ -60,7 +63,9 @@ export default function AnimeWatchPage() {
         // 2) episodes for this anime
         const { data: eps, error: ee } = await supabase
           .from("episodes")
-          .select("id, anime_id, number, title, duration_seconds, playback_id, thumb_path")
+          .select(
+            "id, anime_id, number, title, duration_seconds, playback_id, thumb_path"
+          )
           .eq("anime_id", a.id)
           .order("number", { ascending: true })
           .returns<Episode[]>();
@@ -95,6 +100,16 @@ export default function AnimeWatchPage() {
     [episodes, currentId]
   );
 
+  // public URLs for images
+  const coverUrl = useMemo(
+    () => (anime?.cover_path ? publicUrl("covers", anime.cover_path) : null),
+    [anime?.cover_path]
+  );
+  const bannerUrl = useMemo(
+    () => (anime?.banner_path ? publicUrl("banners", anime.banner_path) : null),
+    [anime?.banner_path]
+  );
+
   const onSelectEpisode = (ep: Episode) => {
     setCurrentId(ep.id);
     // reflect in URL as ?e=number (shallow)
@@ -118,12 +133,6 @@ export default function AnimeWatchPage() {
     );
   }
 
-  // poster for player: banner preferred, else cover
-  const poster =
-    anime.banner_path ??
-    anime.cover_path ??
-    null;
-
   return (
     <div className="px-4 py-6 text-slate-100">
       <div className="max-w-7xl mx-auto">
@@ -134,38 +143,42 @@ export default function AnimeWatchPage() {
               {anime.title}
             </h1>
             {anime.synopsis && (
-              <p className="mt-2 text-slate-300 max-w-3xl">
-                {anime.synopsis}
-              </p>
+              <p className="mt-2 text-slate-300 max-w-3xl">{anime.synopsis}</p>
             )}
           </div>
         </div>
 
-        {/* Layout: player (red) + episodes (blue) */}
+        {/* Layout: player + episodes */}
         <div className="flex flex-col md:flex-row gap-6">
           {/* Player area */}
           <div className="flex-1 min-w-0">
             {current?.playback_id ? (
               <AnimePlayer
                 playbackId={current.playback_id}
-                poster={poster}
+                poster={bannerUrl ?? coverUrl}
                 title={anime.title}
-                episodeLabel={`Episode ${current.number}${current.title ? ` – ${current.title}` : ""}`}
+                episodeLabel={`Episode ${current.number}${
+                  current.title ? ` – ${current.title}` : ""
+                }`}
               />
             ) : (
               <div className="aspect-video rounded-xl border border-blue-800 bg-blue-950 grid place-items-center">
-                <p className="text-slate-300">No video available for this episode.</p>
+                <p className="text-slate-300">
+                  No video available for this episode.
+                </p>
               </div>
             )}
 
-            {/* simple controls/next-prev (optional) */}
+            {/* simple prev/next controls */}
             <div className="mt-3 flex flex-wrap gap-2">
-              {/* Prev/Next by number */}
               {(() => {
                 if (!current) return null;
                 const idx = episodes.findIndex((e) => e.id === current.id);
                 const prev = idx > 0 ? episodes[idx - 1] : null;
-                const next = idx >= 0 && idx < episodes.length - 1 ? episodes[idx + 1] : null;
+                const next =
+                  idx >= 0 && idx < episodes.length - 1
+                    ? episodes[idx + 1]
+                    : null;
                 return (
                   <>
                     {prev && (
