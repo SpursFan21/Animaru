@@ -9,6 +9,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "../../utils/supabaseClient";
 import { Button } from "../../components/ui/button";
 import { ChevronDown, Check } from "lucide-react";
+import Link from "next/link";
 
 type Status = "watching" | "planned" | "completed" | "dropped";
 
@@ -208,12 +209,13 @@ export default function AnimeModal({ open, onClose, anime }: Props) {
 
               {/* Actions */}
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <a
-                  href={`/watch/${a.slug}`}
+                <Link
+                  href={`/anime/${a.slug}`}
+                  onClick={onClose}
                   className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 font-medium text-white hover:bg-sky-500"
                 >
                   Watch now
-                </a>
+                </Link>
 
                 {/* Add to watchlist dropdown */}
                 <div className="relative" ref={menuRef}>
