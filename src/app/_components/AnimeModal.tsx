@@ -31,6 +31,9 @@ type Props = {
   open: boolean;
   onClose: () => void;
   anime: AnimeForModal | null;
+  mode?: "add" | "manage";
+  currentStatus?: Status;
+  onRemoved?: () => void;
 };
 
 function publicUrl(bucket: "covers" | "banners", path?: string | null) {
@@ -38,7 +41,14 @@ function publicUrl(bucket: "covers" | "banners", path?: string | null) {
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
-export default function AnimeModal({ open, onClose, anime }: Props) {
+export default function AnimeModal({
+  open,
+  onClose,
+  anime,
+  mode = "add",
+  currentStatus,
+  onRemoved,
+}: Props) {
   const user = useSelector<RootState, User | null>((s) => s.auth.user);
   const userId = user?.id ?? null;
 
@@ -48,6 +58,9 @@ export default function AnimeModal({ open, onClose, anime }: Props) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // NEW: track the user's existing status for this anime so we can show the checkmark
+  const [activeStatus, setActiveStatus] = useState<Status | null>(currentStatus ?? null);
 
   // Close on ESC / click outside menu
   useEffect(() => {
@@ -65,23 +78,62 @@ export default function AnimeModal({ open, onClose, anime }: Props) {
     };
   }, [open, onClose]);
 
-  // Reset flashes when opening
+  // Reset flashes and sync initial status when opening
   useEffect(() => {
     if (open) {
       setMsg(null);
       setErr(null);
       setMenuOpen(false);
+      setActiveStatus(currentStatus ?? null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, anime?.id]);
 
-  // Unconditional hooks
+  // If open the modal from a non-watchlist context (mode="add"),
+  // auto-detect if the user already has this anime in a list and show the checkmark.
+  useEffect(() => {
+    if (!open || !anime || !userId || mode !== "add") return;
+    let mounted = true;
+
+    void (async () => {
+      const { data, error } = await supabase
+        .from("watchlist")
+        .select("status")
+        .eq("user_id", userId)
+        .eq("anime_id", anime.id)
+        .limit(1)
+        .returns<{ status: Status }[]>();   // <- type the payload
+
+      if (!mounted) return;
+      if (!error && data?.[0]?.status) setActiveStatus(data[0].status);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [open, anime, userId, mode]);
+
+
   const coverUrl = useMemo(() => publicUrl("covers", anime?.cover_path), [anime?.cover_path]);
   const bannerUrl = useMemo(() => publicUrl("banners", anime?.banner_path), [anime?.banner_path]);
 
   if (!open || !anime) return null;
   const a = anime;
 
-  async function addToWatchlist(status: Status) {
+  function labelFor(s: Status) {
+    switch (s) {
+      case "watching":
+        return "Watching";
+      case "planned":
+        return "Plan to Watch";
+      case "completed":
+        return "Completed";
+      case "dropped":
+        return "Dropped";
+    }
+  }
+
+  async function upsertWatchlist(status: Status) {
     if (!userId) {
       setErr("Please log in to manage your watchlist.");
       return;
@@ -103,7 +155,8 @@ export default function AnimeModal({ open, onClose, anime }: Props) {
         { onConflict: "user_id,anime_id" }
       );
       if (error) throw error;
-      setMsg(`Added to "${labelFor(status)}".`);
+      setMsg(`${mode === "add" ? "Added to" : "Updated to"} "${labelFor(status)}".`);
+      setActiveStatus(status); // reflect in UI
       setMenuOpen(false);
     } catch (e: unknown) {
       const m = e instanceof Error ? e.message : "Could not update watchlist.";
@@ -113,18 +166,34 @@ export default function AnimeModal({ open, onClose, anime }: Props) {
     }
   }
 
-  function labelFor(s: Status) {
-    switch (s) {
-      case "watching":
-        return "Watching";
-      case "planned":
-        return "Plan to Watch";
-      case "completed":
-        return "Completed";
-      case "dropped":
-        return "Dropped";
+  async function removeFromWatchlist() {
+    if (!userId) {
+      setErr("Please log in to manage your watchlist.");
+      return;
+    }
+    setSaving(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const { error } = await supabase
+        .from("watchlist")
+        .delete()
+        .eq("user_id", userId)
+        .eq("anime_id", a.id);
+      if (error) throw error;
+      setMsg("Removed from watchlist.");
+      setActiveStatus(null); // no current status anymore
+      setMenuOpen(false);
+      onRemoved?.();
+    } catch (e: unknown) {
+      const m = e instanceof Error ? e.message : "Could not remove from watchlist.";
+      setErr(m);
+    } finally {
+      setSaving(false);
     }
   }
+
+  const buttonLabel = mode === "manage" ? "Update watchlist" : "Add to watchlist";
 
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center p-4">
@@ -135,12 +204,11 @@ export default function AnimeModal({ open, onClose, anime }: Props) {
         onClick={onClose}
       />
 
-      {/* Wrapper: keep overflow visible so the dropdown can spill outside */}
       <div
         className="relative w-full max-w-[1000px] max-h-[90vh] overflow-visible rounded-2xl border border-blue-800 bg-blue-950 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Banner (only top corners rounded & clipped) */}
+        {/* Banner */}
         <div className="relative h-64 md:h-80 rounded-t-2xl overflow-hidden">
           {bannerUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -151,9 +219,8 @@ export default function AnimeModal({ open, onClose, anime }: Props) {
           <div className="absolute inset-0 bg-gradient-to-r from-blue-950/80 via-blue-950/50 to-transparent" />
         </div>
 
-        {/* Scrollable content area INSIDE the card */}
+        {/* Content */}
         <div className="relative -mt-40 md:-mt-56 px-5 md:px-8 pb-8">
-          {/* Close */}
           <button
             onClick={onClose}
             className="absolute right-3 top-3 rounded-md border border-blue-800 bg-blue-900/70 px-2 py-1 text-sm text-slate-200 hover:bg-blue-800"
@@ -175,32 +242,20 @@ export default function AnimeModal({ open, onClose, anime }: Props) {
               <p className="text-xs text-slate-300/80 mb-1">#Spotlight</p>
               <h2 className="text-3xl md:text-4xl font-extrabold mb-2">{a.title}</h2>
 
-              {/* Meta chips */}
               <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                {activeStatus && (
+                  <span className="rounded bg-blue-900/60 px-2 py-1 border border-blue-800 capitalize">
+                    Current: {activeStatus}
+                  </span>
+                )}
                 {(a.season ?? a.year) && (
                   <span className="rounded bg-blue-900/60 px-2 py-1 border border-blue-800">
                     {(a.season ? `${a.season} ` : "") + (a.year ?? "")}
                   </span>
                 )}
                 {typeof a.episodes === "number" && (
-                  <span className="rounded bg-blue-900/60 px-2 py-1 border border-blue-800">
-                    {a.episodes} ep
-                  </span>
+                  <span className="rounded bg-blue-900/60 px-2 py-1 border border-blue-800">{a.episodes} ep</span>
                 )}
-                {a.status && (
-                  <span className="rounded bg-blue-900/60 px-2 py-1 border border-blue-800 capitalize">
-                    {a.status}
-                  </span>
-                )}
-                {a.genres?.length ? (
-                  <span className="flex flex-wrap gap-1">
-                    {a.genres.slice(0, 4).map((g) => (
-                      <span key={g} className="rounded bg-blue-900/60 px-2 py-1 border border-blue-800">
-                        {g}
-                      </span>
-                    ))}
-                  </span>
-                ) : null}
               </div>
 
               {a.synopsis && (
@@ -217,35 +272,53 @@ export default function AnimeModal({ open, onClose, anime }: Props) {
                   Watch now
                 </Link>
 
-                {/* Add to watchlist dropdown */}
+                {/* Watchlist dropdown */}
                 <div className="relative" ref={menuRef}>
                   <Button
                     onClick={() => setMenuOpen((v) => !v)}
                     className="inline-flex items-center gap-2 bg-blue-900/60 hover:bg-blue-900 border border-blue-800"
                     disabled={saving}
                   >
-                    Add to watchlist
+                    {buttonLabel}
                     <ChevronDown className="h-4 w-4" />
                   </Button>
 
                   {menuOpen && (
                     <div className="absolute z-[70] mt-2 w-56 overflow-hidden rounded-md border border-blue-800 bg-blue-900/95 shadow-xl backdrop-blur">
-                      {(["watching", "planned", "completed", "dropped"] as Status[]).map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => addToWatchlist(s)}
-                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-blue-800"
-                          disabled={saving}
-                        >
-                          <span className="capitalize">{labelFor(s)}</span>
-                          {saving && <Check className="h-4 w-4 opacity-60" />}
-                        </button>
-                      ))}
+                      {(["watching", "planned", "completed", "dropped"] as Status[]).map((s) => {
+                        const isActive = activeStatus === s;
+                        return (
+                          <button
+                            key={s}
+                            onClick={() => upsertWatchlist(s)}
+                            className={[
+                              "flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-blue-800",
+                              isActive ? "bg-blue-800/50" : "",
+                            ].join(" ")}
+                            disabled={saving}
+                          >
+                            <span className="capitalize">{labelFor(s)}</span>
+                            {isActive ? <Check className="h-4 w-4" /> : null}
+                          </button>
+                        );
+                      })}
+
+                      {mode === "manage" && (
+                        <>
+                          <div className="h-px bg-blue-800 my-1" />
+                          <button
+                            onClick={removeFromWatchlist}
+                            className="w-full px-3 py-2 text-left text-sm text-red-300 hover:bg-blue-800"
+                            disabled={saving}
+                          >
+                            Remove from watchlist
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
 
-                {/* Flash messages */}
                 {msg && <span className="text-emerald-300 text-sm">{msg}</span>}
                 {err && <span className="text-red-300 text-sm">{err}</span>}
               </div>

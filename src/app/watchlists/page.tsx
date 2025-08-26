@@ -8,8 +8,7 @@ import { useSelector } from "react-redux";
 import type { RootState } from "../../redux/store";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "../../utils/supabaseClient";
-import { Button } from "../../components/ui/button";
-import { ChevronDown } from "lucide-react";
+import AnimeModal, { type AnimeForModal } from "../_components/AnimeModal";
 
 type Status = "watching" | "planned" | "completed" | "dropped";
 type StatusFilter = Status | "all";
@@ -44,18 +43,22 @@ export default function WatchlistPage() {
   const user = useSelector<RootState, User | null>((s) => s.auth.user);
   const userId = user?.id ?? null;
 
-  // UI state
+  // UI
   const [status, setStatus] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("recent");
   const [search, setSearch] = useState("");
   const [genreFilter, setGenreFilter] = useState<string>("all");
   const [platformFilter, setPlatformFilter] = useState<string>("all");
-  const [openMenuFor, setOpenMenuFor] = useState<string | null>(null); // anime_id whose dropdown is open
 
-  // data state
+  // Data
   const [rows, setRows] = useState<WatchlistRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  // Modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalAnime, setModalAnime] = useState<AnimeForModal | null>(null);
+  const [modalStatus, setModalStatus] = useState<Status | undefined>(undefined);
 
   // Require login
   useEffect(() => {
@@ -65,21 +68,7 @@ export default function WatchlistPage() {
     }
   }, [user, router]);
 
-  // Close any open dropdown if you click elsewhere
-  useEffect(() => {
-    const onDocClick = (e: MouseEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (!el) return;
-      // close if the click isn't on a button or menu inside our card actions
-      if (!el.closest?.("[data-card-actions]")) {
-        setOpenMenuFor(null);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  // Load list
+  // Load list (typed & immutable query to avoid any-assign warnings)
   useEffect(() => {
     if (!userId) return;
 
@@ -88,29 +77,32 @@ export default function WatchlistPage() {
       setLoading(true);
       setErr(null);
       try {
-        let q = supabase
+        const orderField = sortBy === "alpha" ? "title" : "updated_at";
+        const orderOpts =
+          sortBy === "alpha"
+            ? ({ ascending: true, nullsFirst: true } as const)
+            : ({ ascending: false } as const);
+
+        const base = supabase
           .from("watchlist")
           .select(
             "id, user_id, anime_id, title, poster_url, status, progress_episode, progress_time_seconds, created_at, updated_at"
           )
           .eq("user_id", userId);
 
-        if (status !== "all") q = q.eq("status", status);
+        const query =
+          status === "all"
+            ? base.order(orderField, orderOpts)
+            : base.eq("status", status).order(orderField, orderOpts);
 
-        if (sortBy === "alpha") {
-          q = q.order("title", { ascending: true, nullsFirst: true }).order("updated_at", { ascending: false });
-        } else {
-          q = q.order("updated_at", { ascending: false });
-        }
-
-        const { data, error } = await q;
+        const { data, error } = await query.returns<WatchlistRow[]>();
         if (error) throw error;
         if (!mounted) return;
 
-        setRows((data ?? []) as WatchlistRow[]);
+        setRows(data ?? []);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Failed to load watchlist.";
-        setErr(msg);
+        setErr(msg ?? "Failed to load watchlist.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -122,7 +114,16 @@ export default function WatchlistPage() {
     };
   }, [userId, status, sortBy]);
 
-  // Unique genre/platform options from loaded rows (only if present)
+  // Filters
+  const counts = useMemo(() => {
+    const base = { all: rows.length, watching: 0, planned: 0, completed: 0, dropped: 0 } as Record<
+      StatusFilter,
+      number
+    >;
+    for (const r of rows) base[r.status] += 1;
+    return base;
+  }, [rows]);
+
   const genreOptions = useMemo(() => {
     const set = new Set<string>();
     rows.forEach((r) => {
@@ -139,35 +140,18 @@ export default function WatchlistPage() {
     return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
   }, [rows]);
 
-  const counts = useMemo(() => {
-    const base = {
-      all: rows.length,
-      watching: 0,
-      planned: 0,
-      completed: 0,
-      dropped: 0,
-    } as Record<StatusFilter, number>;
-    for (const r of rows) base[r.status] += 1;
-    return base;
-  }, [rows]);
-
-  // Client filters
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-
     return rows.filter((r) => {
       if (genreFilter !== "all" && (r.genre ?? "").toLowerCase() !== genreFilter.toLowerCase()) return false;
-      if (platformFilter !== "all" && (r.platform ?? "").toLowerCase() !== platformFilter.toLowerCase())
-        return false;
+      if (platformFilter !== "all" && (r.platform ?? "").toLowerCase() !== platformFilter.toLowerCase()) return false;
       if (q && !(r.title ?? r.anime_id).toLowerCase().includes(q)) return false;
       return true;
     });
   }, [rows, search, genreFilter, platformFilter]);
 
-  // Sort for "release" (client)
   const visible = useMemo(() => {
     if (sortBy !== "release") return filtered;
-
     return [...filtered].sort((a, b) => {
       const da = a.release_date ? Date.parse(a.release_date) : NaN;
       const db = b.release_date ? Date.parse(b.release_date) : NaN;
@@ -178,34 +162,51 @@ export default function WatchlistPage() {
     });
   }, [filtered, sortBy]);
 
-  // Mutations
-  async function updateStatus(anime_id: string, next: Status) {
-    if (!userId) return;
-    const { error } = await supabase
-      .from("watchlist")
-      .update({ status: next })
-      .eq("user_id", userId)
-      .eq("anime_id", anime_id);
-    if (error) throw error;
-  }
+  // Open modal for a given row (typed anime fetch)
+  async function openModalFor(row: WatchlistRow) {
+    type AnimeMini = {
+      id: string;
+      slug: string;
+      title: string;
+      synopsis: string | null;
+      cover_path: string | null;
+      banner_path: string | null;
+      episodes: number | null;
+      season: string | null;
+      year: number | null;
+    };
 
-  async function removeFromWatchlist(anime_id: string) {
-    if (!userId) return;
-    const { error } = await supabase.from("watchlist").delete().eq("user_id", userId).eq("anime_id", anime_id);
-    if (error) throw error;
-  }
+    const { data, error } = await supabase
+      .from("anime")
+      .select("id, slug, title, synopsis, cover_path, banner_path, episodes, season, year")
+      .eq("id", row.anime_id)
+      .limit(1)
+      .returns<AnimeMini[]>();
 
-  // Menu action helper
-  const handleMenuAction = async (r: WatchlistRow, action: Status | "remove") => {
-    setOpenMenuFor(null);
-    if (action === "remove") {
-      await removeFromWatchlist(r.anime_id);
-      setRows((prev) => prev.filter((x) => x.anime_id !== r.anime_id));
-      return;
+    if (error || !data?.[0]) {
+      // fallback if not found; still show with minimal info
+      setModalAnime({
+        id: row.anime_id,
+        slug: row.anime_id, // fallback; Watch now may not work if truly missing
+        title: row.title ?? "Unknown",
+      });
+    } else {
+      const a = data[0];
+      setModalAnime({
+        id: a.id,
+        slug: a.slug,
+        title: a.title,
+        synopsis: a.synopsis,
+        cover_path: a.cover_path,
+        banner_path: a.banner_path,
+        episodes: a.episodes,
+        season: a.season,
+        year: a.year,
+      });
     }
-    await updateStatus(r.anime_id, action);
-    setRows((prev) => prev.map((x) => (x.anime_id === r.anime_id ? { ...x, status: action } : x)));
-  };
+    setModalStatus(row.status);
+    setModalOpen(true);
+  }
 
   return (
     <div className="min-h-[80vh] bg-blue-950 text-slate-100 px-4 py-6">
@@ -276,7 +277,7 @@ export default function WatchlistPage() {
           </select>
         </div>
 
-        {/* Content */}
+        {/* Cards (click to open modal) */}
         <div className="rounded-2xl bg-blue-900/50 border border-blue-800 shadow-xl p-4">
           {err && (
             <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
@@ -291,7 +292,11 @@ export default function WatchlistPage() {
           ) : (
             <ul className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(180px,1fr))]">
               {visible.map((r) => (
-                <li key={r.id} className="rounded-lg border border-blue-800 bg-blue-900/40 p-3">
+                <li
+                  key={r.id}
+                  className="rounded-lg border border-blue-800 bg-blue-900/40 p-3 cursor-pointer hover:border-sky-500 transition"
+                  onClick={() => void openModalFor(r)}
+                >
                   {r.poster_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -307,67 +312,26 @@ export default function WatchlistPage() {
 
                   <div className="font-semibold line-clamp-2">{r.title ?? r.anime_id}</div>
                   <div className="text-xs text-slate-400 mt-1 capitalize">{r.status}</div>
-                  {r.genre && <div className="text-xs text-slate-400 mt-0.5">Genre: {r.genre}</div>}
-                  {r.platform && <div className="text-xs text-slate-400 mt-0.5">Platform: {r.platform}</div>}
-                  {r.release_date && (
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      Released: {new Date(r.release_date).toLocaleDateString()}
-                    </div>
-                  )}
-
-                  {/* Single action: Watchlist Status (dropdown) */}
-                  <div className="mt-3 relative" data-card-actions>
-                    <Button
-                      className="bg-sky-600 hover:bg-sky-500 w-full justify-between"
-                      onClick={() => setOpenMenuFor((id) => (id === r.anime_id ? null : r.anime_id))}
-                      aria-expanded={openMenuFor === r.anime_id}
-                      aria-haspopup="menu"
-                    >
-                      Watchlist Status
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-
-                    {openMenuFor === r.anime_id && (
-                      <div
-                        role="menu"
-                        className="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-md border border-blue-800 bg-blue-950/95 shadow-xl backdrop-blur"
-                      >
-                        {(
-                          [
-                            { key: "watching", label: "Watching" },
-                            { key: "planned", label: "Plan to Watch" },
-                            { key: "completed", label: "Completed" },
-                            { key: "dropped", label: "Dropped" },
-                          ] as { key: Status; label: string }[]
-                        ).map((opt) => (
-                          <button
-                            key={opt.key}
-                            role="menuitem"
-                            onClick={() => handleMenuAction(r, opt.key)}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-800"
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-
-                        <div className="h-px bg-blue-800/70" />
-
-                        <button
-                          role="menuitem"
-                          onClick={() => handleMenuAction(r, "remove")}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-800 text-red-300"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                  </div>
                 </li>
               ))}
             </ul>
           )}
         </div>
       </div>
+
+      {/* Manage modal */}
+      <AnimeModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        anime={modalAnime}
+        mode="manage"
+        currentStatus={modalStatus}
+        onRemoved={() => {
+          if (!modalAnime) return;
+          setRows((prev) => prev.filter((x) => x.anime_id !== modalAnime.id));
+          setModalOpen(false);
+        }}
+      />
     </div>
   );
 }
