@@ -18,6 +18,8 @@ type Anime = {
   cover_path: string | null;
 };
 
+type Variant = "sub" | "dub";
+
 // helper to build public storage URLs
 function publicUrl(bucket: "banners" | "covers", path?: string | null) {
   if (!path) return null;
@@ -29,16 +31,26 @@ export default function AnimeWatchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // read from URL (default to "sub")
+  const qsVariant = (searchParams.get("lang") === "dub" ? "dub" : "sub") as Variant;
+  const qsEp = Number(searchParams.get("e") ?? "0");
+
+  const [variant, setVariant] = useState<Variant>(qsVariant);
   const [anime, setAnime] = useState<Anime | null>(null);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [currentId, setCurrentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // which episode is active
-  const qsEp = Number(searchParams.get("e") ?? "0"); // optional ?e=12
-  const [currentId, setCurrentId] = useState<string | null>(null);
+  // keep URL in sync when variant changes (preserve ?e)
+  useEffect(() => {
+    // shallow replace to avoid full reload
+    const next = `/anime/${params.slug}?lang=${variant}${qsEp ? `&e=${qsEp}` : ""}`;
+    router.replace(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant, params.slug]); // (qsEp is already in URL; no need as dep)
 
-  // load anime + episodes
+  // load anime + episodes for current variant
   useEffect(() => {
     let mounted = true;
     const load = async () => {
@@ -57,33 +69,29 @@ export default function AnimeWatchPage() {
         const a = (animeRows ?? [])[0];
         if (!a) throw new Error("Anime not found.");
         if (!mounted) return;
-
         setAnime(a);
 
-        // 2) episodes for this anime
+        // 2) episodes for this anime & variant
         const { data: eps, error: ee } = await supabase
           .from("episodes")
-          .select(
-            "id, anime_id, number, title, duration_seconds, playback_id, thumb_path"
-          )
+          .select("id, anime_id, number, title, duration_seconds, playback_id, thumb_path")
           .eq("anime_id", a.id)
+          .eq("variant", variant)
           .order("number", { ascending: true })
           .returns<Episode[]>();
 
         if (ee) throw ee;
 
         const clean = (eps ?? []).filter((e) => typeof e.number === "number");
-
+        if (!mounted) return;
         setEpisodes(clean);
 
         // pick episode by ?e or first
-        const byQuery =
-          clean.find((ep) => ep.number === qsEp) ?? clean[0] ?? null;
-
+        const byQuery = clean.find((ep) => ep.number === qsEp) ?? clean[0] ?? null;
         setCurrentId(byQuery?.id ?? null);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Failed to load anime.";
-        setErr(msg);
+        if (mounted) setErr(msg);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -93,7 +101,7 @@ export default function AnimeWatchPage() {
     return () => {
       mounted = false;
     };
-  }, [params.slug, qsEp]);
+  }, [params.slug, variant, qsEp]);
 
   const current = useMemo(
     () => episodes.find((e) => e.id === currentId) ?? null,
@@ -112,15 +120,13 @@ export default function AnimeWatchPage() {
 
   const onSelectEpisode = (ep: Episode) => {
     setCurrentId(ep.id);
-    // reflect in URL as ?e=number (shallow)
-    const url = `/anime/${params.slug}?e=${ep.number}`;
+    // reflect in URL as ?e=number (shallow) and persist ?lang
+    const url = `/anime/${params.slug}?lang=${variant}&e=${ep.number}`;
     router.replace(url);
   };
 
   if (loading) {
-    return (
-      <div className="min-h-[70vh] px-4 py-6 text-slate-200">Loading…</div>
-    );
+    return <div className="min-h-[70vh] px-4 py-6 text-slate-200">Loading…</div>;
   }
 
   if (err || !anime) {
@@ -139,9 +145,7 @@ export default function AnimeWatchPage() {
         {/* Title & meta */}
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold">
-              {anime.title}
-            </h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold">{anime.title}</h1>
             {anime.synopsis && (
               <p className="mt-2 text-slate-300 max-w-3xl">{anime.synopsis}</p>
             )}
@@ -153,62 +157,77 @@ export default function AnimeWatchPage() {
           {/* Player area */}
           <div className="flex-1 min-w-0">
             {current?.playback_id ? (
-              <AnimePlayer
-                playbackId={current.playback_id}
-                poster={bannerUrl ?? coverUrl}
-                title={anime.title}
-                episodeLabel={`Episode ${current.number}${
-                  current.title ? ` – ${current.title}` : ""
-                }`}
-              />
+              <>
+                <AnimePlayer
+                  playbackId={current.playback_id}
+                  poster={bannerUrl ?? coverUrl}
+                  title={anime.title}
+                  episodeLabel={`Episode ${current.number}${current.title ? ` – ${current.title}` : ""} [${variant.toUpperCase()}]`}
+                />
+
+                {/* Variant toggle */}
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-sm text-slate-300">Audio:</span>
+                  <div className="inline-flex rounded-md overflow-hidden border border-blue-800">
+                    <button
+                      className={[
+                        "px-3 py-1.5 text-sm",
+                        variant === "sub" ? "bg-sky-600 text-white" : "bg-blue-900/40 hover:bg-blue-900",
+                      ].join(" ")}
+                      onClick={() => setVariant("sub")}
+                    >
+                      Sub
+                    </button>
+                    <button
+                      className={[
+                        "px-3 py-1.5 text-sm border-l border-blue-800",
+                        variant === "dub" ? "bg-sky-600 text-white" : "bg-blue-900/40 hover:bg-blue-900",
+                      ].join(" ")}
+                      onClick={() => setVariant("dub")}
+                    >
+                      Dub
+                    </button>
+                  </div>
+                </div>
+
+                {/* simple prev/next controls */}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(() => {
+                    const idx = current ? episodes.findIndex((e) => e.id === current.id) : -1;
+                    const prev = idx > 0 ? episodes[idx - 1] : null;
+                    const next = idx >= 0 && idx < episodes.length - 1 ? episodes[idx + 1] : null;
+                    return (
+                      <>
+                        {prev && (
+                          <button
+                            className="px-3 py-1.5 rounded-md border border-blue-800 hover:border-sky-500"
+                            onClick={() => onSelectEpisode(prev)}
+                          >
+                            ← Prev
+                          </button>
+                        )}
+                        {next && (
+                          <button
+                            className="px-3 py-1.5 rounded-md border border-blue-800 hover:border-sky-500"
+                            onClick={() => onSelectEpisode(next)}
+                          >
+                            Next →
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </>
             ) : (
               <div className="aspect-video rounded-xl border border-blue-800 bg-blue-950 grid place-items-center">
-                <p className="text-slate-300">
-                  No video available for this episode.
-                </p>
+                <p className="text-slate-300">No video available for this episode.</p>
               </div>
             )}
-
-            {/* simple prev/next controls */}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(() => {
-                if (!current) return null;
-                const idx = episodes.findIndex((e) => e.id === current.id);
-                const prev = idx > 0 ? episodes[idx - 1] : null;
-                const next =
-                  idx >= 0 && idx < episodes.length - 1
-                    ? episodes[idx + 1]
-                    : null;
-                return (
-                  <>
-                    {prev && (
-                      <button
-                        className="px-3 py-1.5 rounded-md border border-blue-800 hover:border-sky-500"
-                        onClick={() => onSelectEpisode(prev)}
-                      >
-                        ← Prev
-                      </button>
-                    )}
-                    {next && (
-                      <button
-                        className="px-3 py-1.5 rounded-md border border-blue-800 hover:border-sky-500"
-                        onClick={() => onSelectEpisode(next)}
-                      >
-                        Next →
-                      </button>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
           </div>
 
           {/* Episode list */}
-          <EpisodeList
-            episodes={episodes}
-            currentId={currentId}
-            onSelect={onSelectEpisode}
-          />
+          <EpisodeList episodes={episodes} currentId={currentId} onSelect={onSelectEpisode} />
         </div>
       </div>
     </div>
