@@ -1,5 +1,3 @@
-//src/app/_components/BannerSlider.tsx
-
 // src/app/_components/BannerSlider.tsx
 
 "use client";
@@ -14,7 +12,7 @@ type Slide = {
   slug: string;
   title: string;
   tagline?: string | null;
-  banner_path: string | null; // path inside the `banners` bucket (nullable)
+  banner_path: string | null;
 };
 
 type AnimeRow = {
@@ -23,7 +21,6 @@ type AnimeRow = {
   title: string;
   synopsis: string | null;
   banner_path: string | null;
-  // updated_at is used just for ordering; I don't need to read it
 };
 
 function bannerUrl(path: string | null | undefined) {
@@ -38,7 +35,6 @@ export default function BannerSlider() {
 
   useEffect(() => {
     let mounted = true;
-
     const load = async () => {
       const { data, error } = await supabase
         .from("anime")
@@ -46,10 +42,9 @@ export default function BannerSlider() {
         .not("banner_path", "is", null)
         .order("updated_at", { ascending: false })
         .limit(5)
-        .returns<AnimeRow[]>(); // typed result
+        .returns<AnimeRow[]>();
 
       if (!mounted) return;
-
       if (error || !data) {
         setSlides([]);
         return;
@@ -60,7 +55,7 @@ export default function BannerSlider() {
         slug: r.slug,
         title: r.title,
         tagline: r.synopsis ?? "",
-        banner_path: r.banner_path, // keep nullable and let bannerUrl handle it
+        banner_path: r.banner_path,
       }));
 
       setSlides(mapped);
@@ -73,19 +68,13 @@ export default function BannerSlider() {
     };
   }, []);
 
-  // autoplay
   useEffect(() => {
     if (slides.length <= 1) return;
-
-    if (timer.current) {
-      clearInterval(timer.current);
-    }
-
+    if (timer.current) clearInterval(timer.current);
     timer.current = setInterval(
       () => setIdx((i) => (i + 1) % slides.length),
       6000
     );
-
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
@@ -108,57 +97,94 @@ export default function BannerSlider() {
         bg-blue-900
       "
     >
-      {/* background image */}
+      {/* Background + overlay (30% solid, 20% fade, right 50% clear) */}
       {bg && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={bg}
-          alt={current?.title ?? "Banner"}
-          className="
-            absolute inset-0 h-full w-full object-cover
-            object-[center_right]
-          "
-          loading="eager"
-        />
+        <>
+          <img
+            src={bg}
+            alt={current?.title ?? "Banner"}
+            className="absolute inset-0 h-full w-full object-cover object-[center_right]"
+            loading="eager"
+          />
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage:
+                "linear-gradient(90deg, rgba(30,58,138,1) 0%, rgba(30,58,138,1) 30%, rgba(30,58,138,0) 50%, rgba(30,58,138,0) 100%)",
+            }}
+          />
+        </>
       )}
 
-      {/* left gradient overlay for readability */}
-      <div
-        className="
-          absolute inset-0
-          bg-gradient-to-r
-          from-blue-950/95 via-blue-950/75 to-transparent
-        "
-      />
-
-      {/* content container aligned with site width */}
-      <div className="relative max-w-7xl mx-auto px-4 h-full flex items-center">
-        <div className="w-full max-w-2xl pr-6">
-          {/*spacer*/}
-          <div className="my-20" />
-
-          <div className="text-xs uppercase tracking-wider text-slate-300/80 mb-2">
+      {/* Content: full-width container so we can hug the left overlay.
+          The text block is sized to live entirely inside that left 30% + a bit of the fade. */}
+      <div className="relative h-full flex items-center">
+        <div
+          className="
+            /* nudge from the very edge so it feels intentional */
+            ml-4 sm:ml-6 md:ml-10 lg:ml-14 xl:ml-50
+            my-4 sm:my-6 md:my-10 lg:my-14 xl:my-50
+            /* take up the left zone */
+            w-[85%] sm:w-[72%] md:w-[60%] lg:w-[52%] xl:w-[45%]
+            max-w-[780px]
+            pr-6
+          "
+        >
+          <div className="mb-2 text-[10px] sm:text-xs uppercase tracking-wider text-slate-300/90">
             #1 Spotlight
           </div>
-          <h2 className="text-4xl sm:text-5xl font-extrabold mb-3 drop-shadow">
+
+          <h2
+            className="
+              font-extrabold
+              text-4xl sm:text-5xl md:text-6xl lg:text-7xl
+              leading-[1.05]
+              drop-shadow
+              mb-4 sm:mb-5
+            "
+          >
             {current?.title ?? ""}
           </h2>
+
           {current?.tagline && (
-            <p className="text-slate-200/90 max-w-xl mb-6 line-clamp-3">
+            <p
+              className="
+                text-slate-200/95
+                text-sm sm:text-base md:text-lg
+                leading-relaxed
+                max-w-none
+                mb-6 md:mb-8
+                line-clamp-3 md:line-clamp-4
+              "
+            >
               {current.tagline}
             </p>
           )}
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Link
               href={`/anime/${current?.slug ?? ""}`}
-              className="px-5 py-2.5 rounded-md bg-sky-600 hover:bg-sky-500 text-white font-medium"
+              className="
+                px-4 sm:px-5 md:px-6
+                py-2 sm:py-2.5 md:py-3
+                rounded-md
+                bg-sky-600 hover:bg-sky-500
+                text-white font-semibold
+                text-sm sm:text-base
+              "
             >
               Watch Now
             </Link>
             <Link
               href={`/anime/${current?.slug ?? ""}`}
-              className="px-5 py-2.5 rounded-md border border-slate-600 hover:border-sky-500 text-slate-100"
+              className="
+                px-4 sm:px-5 md:px-6
+                py-2 sm:py-2.5 md:py-3
+                rounded-md
+                border border-slate-600 hover:border-sky-500
+                text-slate-100 font-medium
+                text-sm sm:text-base
+              "
             >
               Details
             </Link>
@@ -166,7 +192,7 @@ export default function BannerSlider() {
         </div>
       </div>
 
-      {/* arrows */}
+      {/* Arrows */}
       <button
         aria-label="Previous"
         onClick={() => go(idx - 1)}
@@ -194,7 +220,7 @@ export default function BannerSlider() {
         <ChevronRight className="h-5 w-5" />
       </button>
 
-      {/* dots */}
+      {/* Dots */}
       <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
         {slides.map((_, i) => (
           <button
