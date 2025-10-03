@@ -1,5 +1,4 @@
 // src/app/_components/BannerSlider.tsx
-
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -71,10 +70,7 @@ export default function BannerSlider() {
   useEffect(() => {
     if (slides.length <= 1) return;
     if (timer.current) clearInterval(timer.current);
-    timer.current = setInterval(
-      () => setIdx((i) => (i + 1) % slides.length),
-      6000
-    );
+    timer.current = setInterval(() => setIdx((i) => (i + 1) % slides.length), 6000);
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
@@ -94,10 +90,10 @@ export default function BannerSlider() {
         relative
         min-h-[42vh] sm:min-h-[50vh] lg:min-h-[56vh]
         max-h-[680px]
-        bg-blue-900
+        bg-blue-950
       "
     >
-      {/* Background + overlay (30% solid, 20% fade, right 50% clear) */}
+      {/* Background + overlay */}
       {bg && (
         <>
           <img
@@ -106,25 +102,34 @@ export default function BannerSlider() {
             className="absolute inset-0 h-full w-full object-cover object-[center_right]"
             loading="eager"
           />
+
+          {/* Left 40% clear → fade → heavy solid on left */}
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
-              backgroundImage:
-                "linear-gradient(90deg, rgba(30,58,138,1) 0%, rgba(30,58,138,1) 30%, rgba(30,58,138,0) 50%, rgba(30,58,138,0) 100%)",
+              backgroundImage: `
+                linear-gradient(
+                  90deg,
+                  rgba(23,37,84,1) 0%,      /* solid dark at far left */
+                  rgba(23,37,84,0.95) 15%,  /* heavy shading */
+                  rgba(23,37,84,0.75) 30%,  /* medium heavy */
+                  rgba(23,37,84,0.35) 40%,  /* lighter */
+                  rgba(23,37,84,0.15) 50%,  /* almost clear */
+                  rgba(23,37,84,0) 60%,     /* fully clear */
+                  rgba(23,37,84,0) 100%     /* keep clear on right side */
+                )
+              `,
             }}
           />
         </>
       )}
 
-      {/* Content: full-width container so we can hug the left overlay.
-          The text block is sized to live entirely inside that left 30% + a bit of the fade. */}
+      {/* Content block pinned to the left overlay */}
       <div className="relative h-full flex items-center">
         <div
           className="
-            /* nudge from the very edge so it feels intentional */
             ml-4 sm:ml-6 md:ml-10 lg:ml-14 xl:ml-50
             my-4 sm:my-6 md:my-10 lg:my-14 xl:my-50
-            /* take up the left zone */
             w-[85%] sm:w-[72%] md:w-[60%] lg:w-[52%] xl:w-[45%]
             max-w-[780px]
             pr-6
@@ -199,9 +204,10 @@ export default function BannerSlider() {
         className="
           absolute left-3 sm:left-6 top-1/2 -translate-y-1/2
           grid place-items-center h-10 w-10 rounded-full
-          bg-blue-950/60 hover:bg-blue-950/80
-          border border-blue-800/70
+          bg-blue-800/60 hover:bg-blue-800/80
+          border border-blue-700/70
           text-slate-100
+          transition
         "
       >
         <ChevronLeft className="h-5 w-5" />
@@ -212,9 +218,10 @@ export default function BannerSlider() {
         className="
           absolute right-3 sm:right-6 top-1/2 -translate-y-1/2
           grid place-items-center h-10 w-10 rounded-full
-          bg-blue-950/60 hover:bg-blue-950/80
-          border border-blue-800/70
+          bg-blue-800/60 hover:bg-blue-800/80
+          border border-blue-700/70
           text-slate-100
+          transition
         "
       >
         <ChevronRight className="h-5 w-5" />
