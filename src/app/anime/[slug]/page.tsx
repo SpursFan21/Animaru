@@ -31,6 +31,18 @@ export default function AnimeWatchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // get the signed-in user id (no auth-helpers)
+  const [userId, setUserId] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (mounted) setUserId(data?.user?.id ?? null);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // read from URL (default to "sub")
   const qsVariant = (searchParams.get("lang") === "dub" ? "dub" : "sub") as Variant;
   const qsEp = Number(searchParams.get("e") ?? "0");
@@ -44,11 +56,10 @@ export default function AnimeWatchPage() {
 
   // keep URL in sync when variant changes (preserve ?e)
   useEffect(() => {
-    // shallow replace to avoid full reload
     const next = `/anime/${params.slug}?lang=${variant}${qsEp ? `&e=${qsEp}` : ""}`;
     router.replace(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variant, params.slug]); // (qsEp is already in URL; no need as dep)
+  }, [variant, params.slug]);
 
   // load anime + episodes for current variant
   useEffect(() => {
@@ -74,7 +85,9 @@ export default function AnimeWatchPage() {
         // 2) episodes for this anime & variant
         const { data: eps, error: ee } = await supabase
           .from("episodes")
-          .select("id, anime_id, number, title, duration_seconds, playback_id, thumb_path")
+          .select(
+            "id, anime_id, number, title, duration_seconds, playback_id, thumb_path"
+          )
           .eq("anime_id", a.id)
           .eq("variant", variant)
           .order("number", { ascending: true })
@@ -120,7 +133,6 @@ export default function AnimeWatchPage() {
 
   const onSelectEpisode = (ep: Episode) => {
     setCurrentId(ep.id);
-    // reflect in URL as ?e=number (shallow) and persist ?lang
     const url = `/anime/${params.slug}?lang=${variant}&e=${ep.number}`;
     router.replace(url);
   };
@@ -162,7 +174,12 @@ export default function AnimeWatchPage() {
                   playbackId={current.playback_id}
                   poster={bannerUrl ?? coverUrl}
                   title={anime.title}
-                  episodeLabel={`Episode ${current.number}${current.title ? ` – ${current.title}` : ""} [${variant.toUpperCase()}]`}
+                  episodeLabel={`Episode ${current.number}${
+                    current.title ? ` – ${current.title}` : ""
+                  } [${variant.toUpperCase()}]`}
+                  animeId={anime.id}
+                  episodeId={current.id}
+                  userId={userId ?? ""} // pass user id (empty string if signed out)
                 />
 
                 {/* Variant toggle */}
@@ -172,7 +189,9 @@ export default function AnimeWatchPage() {
                     <button
                       className={[
                         "px-3 py-1.5 text-sm",
-                        variant === "sub" ? "bg-sky-600 text-white" : "bg-blue-900/40 hover:bg-blue-900",
+                        variant === "sub"
+                          ? "bg-sky-600 text-white"
+                          : "bg-blue-900/40 hover:bg-blue-900",
                       ].join(" ")}
                       onClick={() => setVariant("sub")}
                     >
@@ -181,7 +200,9 @@ export default function AnimeWatchPage() {
                     <button
                       className={[
                         "px-3 py-1.5 text-sm border-l border-blue-800",
-                        variant === "dub" ? "bg-sky-600 text-white" : "bg-blue-900/40 hover:bg-blue-900",
+                        variant === "dub"
+                          ? "bg-sky-600 text-white"
+                          : "bg-blue-900/40 hover:bg-blue-900",
                       ].join(" ")}
                       onClick={() => setVariant("dub")}
                     >
@@ -190,12 +211,13 @@ export default function AnimeWatchPage() {
                   </div>
                 </div>
 
-                {/* simple prev/next controls */}
+                {/* Prev/Next controls */}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(() => {
                     const idx = current ? episodes.findIndex((e) => e.id === current.id) : -1;
                     const prev = idx > 0 ? episodes[idx - 1] : null;
-                    const next = idx >= 0 && idx < episodes.length - 1 ? episodes[idx + 1] : null;
+                    const next =
+                      idx >= 0 && idx < episodes.length - 1 ? episodes[idx + 1] : null;
                     return (
                       <>
                         {prev && (
