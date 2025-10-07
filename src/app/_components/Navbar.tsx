@@ -256,6 +256,14 @@ export function Navbar() {
               </Link>
 
               <Link
+                href="/continue-watching"
+                className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500 text-slate-200 hover:text-white"
+                title="Continue Watching"
+              >
+                Resume
+              </Link>
+
+              <Link
                 href="/account"
                 className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500 text-slate-200 hover:text-white"
                 title="Account"
