@@ -1,6 +1,5 @@
 //src\app\anime\[slug]\page.tsx
 
-// src/app/anime/[slug]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,6 +9,7 @@ import AnimePlayer from "../../_components/AnimePlayer";
 import EpisodeList from "../../_components/EpisodeList";
 import type { Episode } from "../../_components/EpisodeList";
 import CommentsSection from "../../_components/CommentsSection";
+import RatingWidget from "../../_components/RatingWidget";
 
 type Anime = {
   id: string;
@@ -287,12 +287,13 @@ export default function AnimeWatchPage() {
             )}
           </div>
 
-          {/* Episode list */}
-          <EpisodeList
-            episodes={episodes}
-            currentId={currentId}
-            onSelect={onSelectEpisode}
-          />
+          {/* Right column: rating + episodes */}
+          <div className="w-full md:w-[340px] flex-shrink-0 space-y-4">
+            <RatingWidget animeId={anime.id} userId={userId} />
+            <EpisodeList episodes={episodes} currentId={currentId} onSelect={onSelectEpisode} />
+          </div>
+
+
         </div>
       </div>
     </div>
