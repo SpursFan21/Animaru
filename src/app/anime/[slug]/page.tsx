@@ -10,6 +10,8 @@ import EpisodeList from "../../_components/EpisodeList";
 import type { Episode } from "../../_components/EpisodeList";
 import CommentsSection from "../../_components/CommentsSection";
 import RatingWidget from "../../_components/RatingWidget";
+import AnimeInfoBox from "../../_components/AnimeInfoBox";
+
 
 type Anime = {
   id: string;
@@ -190,9 +192,6 @@ export default function AnimeWatchPage() {
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold">{anime.title}</h1>
-            {anime.synopsis && (
-              <p className="mt-2 text-slate-300 max-w-3xl">{anime.synopsis}</p>
-            )}
           </div>
         </div>
 
@@ -289,6 +288,7 @@ export default function AnimeWatchPage() {
 
           {/* Right column: rating + episodes */}
           <div className="w-full md:w-[340px] flex-shrink-0 space-y-4">
+            <AnimeInfoBox animeId={anime.id} />
             <RatingWidget animeId={anime.id} userId={userId} />
             <EpisodeList episodes={episodes} currentId={currentId} onSelect={onSelectEpisode} />
           </div>
