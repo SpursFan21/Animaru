@@ -1,5 +1,6 @@
 //src\app\anime\[slug]\page.tsx
 
+// src/app/anime/[slug]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -8,6 +9,7 @@ import { supabase } from "../../../utils/supabaseClient";
 import AnimePlayer from "../../_components/AnimePlayer";
 import EpisodeList from "../../_components/EpisodeList";
 import type { Episode } from "../../_components/EpisodeList";
+import CommentsSection from "../../_components/CommentsSection";
 
 type Anime = {
   id: string;
@@ -20,7 +22,6 @@ type Anime = {
 
 type Variant = "sub" | "dub";
 
-// helper to build public storage URLs
 function publicUrl(bucket: "banners" | "covers", path?: string | null) {
   if (!path) return null;
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
@@ -31,19 +32,55 @@ export default function AnimeWatchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // get the signed-in user id (no auth-helpers)
+  // --- User state ---
   const [userId, setUserId] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  // Fetch current user + metadata
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (mounted) setUserId(data?.user?.id ?? null);
-    });
+    async function loadUser() {
+      const { data } = await supabase.auth.getUser();
+      const user = data?.user;
+      if (!user) return;
+
+      if (mounted) {
+        setUserId(user.id);
+
+        // Pull name/avatar from metadata
+        const name =
+          (user.user_metadata?.name as string | undefined) ??
+          (user.user_metadata?.full_name as string | undefined) ??
+          (user.email ? user.email.split("@")[0] : null);
+
+        const avatar =
+          (user.user_metadata?.avatar_url as string | undefined) ?? null;
+
+        setDisplayName(name ?? null);
+        setAvatarUrl(avatar);
+      }
+
+      // Optional: override with profiles table if it exists
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("username, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profile && mounted) {
+        setDisplayName(profile.username ?? displayName);
+        setAvatarUrl(profile.avatar_url ?? avatarUrl);
+      }
+    }
+
+    loadUser();
     return () => {
       mounted = false;
     };
   }, []);
 
-  // read from URL (default to "sub")
+  // --- Variant & episode selection ---
   const qsVariant = (searchParams.get("lang") === "dub" ? "dub" : "sub") as Variant;
   const qsEp = Number(searchParams.get("e") ?? "0");
 
@@ -54,21 +91,19 @@ export default function AnimeWatchPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // keep URL in sync when variant changes (preserve ?e)
   useEffect(() => {
     const next = `/anime/${params.slug}?lang=${variant}${qsEp ? `&e=${qsEp}` : ""}`;
     router.replace(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant, params.slug]);
 
-  // load anime + episodes for current variant
+  // --- Load anime + episodes ---
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       setLoading(true);
       setErr(null);
       try {
-        // 1) anime by slug
         const { data: animeRows, error: ae } = await supabase
           .from("anime")
           .select("id, slug, title, synopsis, banner_path, cover_path")
@@ -82,7 +117,6 @@ export default function AnimeWatchPage() {
         if (!mounted) return;
         setAnime(a);
 
-        // 2) episodes for this anime & variant
         const { data: eps, error: ee } = await supabase
           .from("episodes")
           .select(
@@ -99,7 +133,6 @@ export default function AnimeWatchPage() {
         if (!mounted) return;
         setEpisodes(clean);
 
-        // pick episode by ?e or first
         const byQuery = clean.find((ep) => ep.number === qsEp) ?? clean[0] ?? null;
         setCurrentId(byQuery?.id ?? null);
       } catch (e: unknown) {
@@ -121,7 +154,6 @@ export default function AnimeWatchPage() {
     [episodes, currentId]
   );
 
-  // public URLs for images
   const coverUrl = useMemo(
     () => (anime?.cover_path ? publicUrl("covers", anime.cover_path) : null),
     [anime?.cover_path]
@@ -166,7 +198,6 @@ export default function AnimeWatchPage() {
 
         {/* Layout: player + episodes */}
         <div className="flex flex-col md:flex-row gap-6">
-          {/* Player area */}
           <div className="flex-1 min-w-0">
             {current?.playback_id ? (
               <>
@@ -179,7 +210,7 @@ export default function AnimeWatchPage() {
                   } [${variant.toUpperCase()}]`}
                   animeId={anime.id}
                   episodeId={current.id}
-                  userId={userId ?? ""} // pass user id (empty string if signed out)
+                  userId={userId ?? ""}
                 />
 
                 {/* Variant toggle */}
@@ -240,6 +271,14 @@ export default function AnimeWatchPage() {
                     );
                   })()}
                 </div>
+
+                {/* Comments */}
+                <CommentsSection
+                  threadId={`${anime.id}:${current.number}`}
+                  userId={userId}
+                  username={displayName}
+                  avatarUrl={avatarUrl}
+                />
               </>
             ) : (
               <div className="aspect-video rounded-xl border border-blue-800 bg-blue-950 grid place-items-center">
@@ -249,7 +288,11 @@ export default function AnimeWatchPage() {
           </div>
 
           {/* Episode list */}
-          <EpisodeList episodes={episodes} currentId={currentId} onSelect={onSelectEpisode} />
+          <EpisodeList
+            episodes={episodes}
+            currentId={currentId}
+            onSelect={onSelectEpisode}
+          />
         </div>
       </div>
     </div>
