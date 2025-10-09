@@ -215,8 +215,7 @@ export function Navbar() {
   };
 
   const navLinks = [
-    { name: "Subbed Anime", href: "/subbed" },
-    { name: "Dubbed Anime", href: "/dubbed" },
+    { name: "Genres", href: "/genres" },
     { name: "Movies", href: "/movies" },
     { name: "Most Popular", href: "/popular" },
   ];

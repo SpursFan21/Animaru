@@ -34,6 +34,7 @@
     "@trpc/server": "^11.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "framer-motion": "^12.23.22",
     "lucide-react": "^0.536.0",
     "mongodb": "^6.20.0",
     "next": "^15.2.3",
