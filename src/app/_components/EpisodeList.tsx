@@ -1,5 +1,6 @@
 //src\app\_components\EpisodeList.tsx
 
+// src/app/_components/EpisodeList.tsx
 "use client";
 
 import { useMemo } from "react";
@@ -11,13 +12,15 @@ export type Episode = {
   title: string | null;
   duration_seconds: number | null;
   playback_id: string | null;
-  thumb_path: string | null; // should be an absolute URL or a path Image loader supports
+  thumb_path: string | null; // absolute URL or loader-supported path
 };
 
 type Props = {
   episodes: Episode[];
   currentId?: string | null;
   onSelect: (ep: Episode) => void;
+  /** Fallback image to use when an episode has no thumb_path (e.g., anime banner). */
+  posterFallback?: string | null;
 };
 
 function formatDuration(s?: number | null) {
@@ -27,7 +30,12 @@ function formatDuration(s?: number | null) {
   return `${m}m ${ss}s`;
 }
 
-export default function EpisodeList({ episodes, currentId, onSelect }: Props) {
+export default function EpisodeList({
+  episodes,
+  currentId,
+  onSelect,
+  posterFallback,
+}: Props) {
   const sorted = useMemo(
     () => [...episodes].sort((a, b) => a.number - b.number),
     [episodes]
@@ -41,6 +49,7 @@ export default function EpisodeList({ episodes, currentId, onSelect }: Props) {
           {sorted.map((ep) => {
             const active = ep.id === currentId;
             const duration = formatDuration(ep.duration_seconds);
+            const thumb = ep.thumb_path || posterFallback || null;
 
             return (
               <li key={ep.id}>
@@ -55,18 +64,17 @@ export default function EpisodeList({ episodes, currentId, onSelect }: Props) {
                 >
                   {/* thumbnail */}
                   <div className="h-12 w-20 rounded-sm bg-blue-950/60 border border-blue-800 overflow-hidden relative">
-                    {ep.thumb_path ? (
+                    {thumb && (
                       <Image
-                        src={ep.thumb_path}
+                        src={thumb}
                         alt=""
                         fill
                         sizes="80px"
                         className="object-cover"
-                        //
-                        // keep unoptimized to avoid Next.js domain checks:
+                        // keep unoptimized to avoid Next.js domain/domain config issues
                         unoptimized
                       />
-                    ) : null}
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0">

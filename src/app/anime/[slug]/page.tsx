@@ -290,7 +290,7 @@ export default function AnimeWatchPage() {
           <div className="w-full md:w-[340px] flex-shrink-0 space-y-4">
             <AnimeInfoBox animeId={anime.id} />
             <RatingWidget animeId={anime.id} userId={userId} />
-            <EpisodeList episodes={episodes} currentId={currentId} onSelect={onSelectEpisode} />
+            <EpisodeList episodes={episodes} currentId={currentId} onSelect={onSelectEpisode} posterFallback={bannerUrl ?? coverUrl}/>
           </div>
 
 
