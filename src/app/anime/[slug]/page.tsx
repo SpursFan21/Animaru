@@ -12,7 +12,6 @@ import CommentsSection from "../../_components/CommentsSection";
 import RatingWidget from "../../_components/RatingWidget";
 import AnimeInfoBox from "../../_components/AnimeInfoBox";
 
-
 type Anime = {
   id: string;
   slug: string;
@@ -39,7 +38,6 @@ export default function AnimeWatchPage() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-  // Fetch current user + metadata
   useEffect(() => {
     let mounted = true;
     async function loadUser() {
@@ -50,7 +48,6 @@ export default function AnimeWatchPage() {
       if (mounted) {
         setUserId(user.id);
 
-        // Pull name/avatar from metadata
         const name =
           (user.user_metadata?.name as string | undefined) ??
           (user.user_metadata?.full_name as string | undefined) ??
@@ -63,7 +60,7 @@ export default function AnimeWatchPage() {
         setAvatarUrl(avatar);
       }
 
-      // Optional: override with profiles table if it exists
+      // optional profile overrides
       const { data: profile } = await supabase
         .from("profiles")
         .select("username, avatar_url")
@@ -76,7 +73,7 @@ export default function AnimeWatchPage() {
       }
     }
 
-    loadUser();
+    void loadUser();
     return () => {
       mounted = false;
     };
@@ -93,49 +90,91 @@ export default function AnimeWatchPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  // availability of each variant (for toggle state & auto-fallback)
+  const [hasSub, setHasSub] = useState<boolean | null>(null);
+  const [hasDub, setHasDub] = useState<boolean | null>(null);
+
+  // keep URL in sync with variant
   useEffect(() => {
     const next = `/anime/${params.slug}?lang=${variant}${qsEp ? `&e=${qsEp}` : ""}`;
     router.replace(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant, params.slug]);
 
-  // --- Load anime + episodes ---
+  // --- Load anime + episodes + availability ---
   useEffect(() => {
     let mounted = true;
+
     const load = async () => {
       setLoading(true);
       setErr(null);
       try {
+        // 1) anime
         const { data: animeRows, error: ae } = await supabase
           .from("anime")
           .select("id, slug, title, synopsis, banner_path, cover_path")
           .eq("slug", params.slug)
           .limit(1)
           .returns<Anime[]>();
-
         if (ae) throw ae;
+
         const a = (animeRows ?? [])[0];
         if (!a) throw new Error("Anime not found.");
         if (!mounted) return;
         setAnime(a);
 
-        const { data: eps, error: ee } = await supabase
-          .from("episodes")
-          .select(
-            "id, anime_id, number, title, duration_seconds, playback_id, thumb_path"
-          )
-          .eq("anime_id", a.id)
-          .eq("variant", variant)
-          .order("number", { ascending: true })
-          .returns<Episode[]>();
+        // 2) availability counts for sub/dub (head queries)
+        const [{ count: subCount }, { count: dubCount }] = await Promise.all([
+          supabase
+            .from("episodes")
+            .select("id", { head: true, count: "exact" })
+            .eq("anime_id", a.id)
+            .eq("variant", "sub"),
+          supabase
+            .from("episodes")
+            .select("id", { head: true, count: "exact" })
+            .eq("anime_id", a.id)
+            .eq("variant", "dub"),
+        ]);
 
-        if (ee) throw ee;
-
-        const clean = (eps ?? []).filter((e) => typeof e.number === "number");
+        const subOk = (subCount ?? 0) > 0;
+        const dubOk = (dubCount ?? 0) > 0;
         if (!mounted) return;
-        setEpisodes(clean);
+        setHasSub(subOk);
+        setHasDub(dubOk);
 
-        const byQuery = clean.find((ep) => ep.number === qsEp) ?? clean[0] ?? null;
+        // helper to load list for a variant
+        const fetchByVariant = async (v: Variant) => {
+          const { data, error } = await supabase
+            .from("episodes")
+            .select(
+              "id, anime_id, number, title, duration_seconds, playback_id, thumb_path"
+            )
+            .eq("anime_id", a.id)
+            .eq("variant", v)
+            .order("number", { ascending: true })
+            .returns<Episode[]>();
+          if (error) throw error;
+          return (data ?? []).filter((e) => typeof e.number === "number");
+        };
+
+        // 3) try current variant first
+        let list = await fetchByVariant(variant);
+
+        // 4) auto-fallback if empty but the other variant exists
+        if (list.length === 0) {
+          const alt: Variant = variant === "sub" ? "dub" : "sub";
+          const altHas = alt === "sub" ? subOk : dubOk;
+          if (altHas) {
+            setVariant(alt); // will also sync URL via the other effect
+            list = await fetchByVariant(alt);
+          }
+        }
+
+        if (!mounted) return;
+        setEpisodes(list);
+
+        const byQuery = list.find((ep) => ep.number === qsEp) ?? list[0] ?? null;
         setCurrentId(byQuery?.id ?? null);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Failed to load anime.";
@@ -149,7 +188,7 @@ export default function AnimeWatchPage() {
     return () => {
       mounted = false;
     };
-  }, [params.slug, variant, qsEp]);
+  }, [params.slug, variant, qsEp, router]);
 
   const current = useMemo(
     () => episodes.find((e) => e.id === currentId) ?? null,
@@ -188,15 +227,55 @@ export default function AnimeWatchPage() {
   return (
     <div className="px-4 py-6 text-slate-100">
       <div className="max-w-7xl mx-auto">
-        {/* Title & meta */}
+        {/* Title */}
         <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold">{anime.title}</h1>
-          </div>
+          <h1 className="text-2xl md:text-3xl font-extrabold">{anime.title}</h1>
         </div>
 
-        {/* Layout: player + episodes */}
+        {/* Variant toggle (always visible) */}
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-sm text-slate-300">Audio:</span>
+          <div className="inline-flex rounded-md overflow-hidden border border-blue-800">
+            <button
+              className={[
+                "px-3 py-1.5 text-sm",
+                variant === "sub"
+                  ? "bg-sky-600 text-white"
+                  : "bg-blue-900/40 hover:bg-blue-900",
+                hasSub === false ? "opacity-50 cursor-not-allowed" : "",
+              ].join(" ")}
+              onClick={() => hasSub !== false && setVariant("sub")}
+              disabled={hasSub === false}
+            >
+              Sub
+            </button>
+            <button
+              className={[
+                "px-3 py-1.5 text-sm border-l border-blue-800",
+                variant === "dub"
+                  ? "bg-sky-600 text-white"
+                  : "bg-blue-900/40 hover:bg-blue-900",
+                hasDub === false ? "opacity-50 cursor-not-allowed" : "",
+              ].join(" ")}
+              onClick={() => hasDub !== false && setVariant("dub")}
+              disabled={hasDub === false}
+            >
+              Dub
+            </button>
+          </div>
+
+          {episodes.length === 0 && (hasSub || hasDub) && (
+            <span className="text-xs text-slate-400 ml-2">
+              {variant.toUpperCase()} has no episodes for this anime.
+              {variant === "sub" && hasDub ? " Try Dub." : ""}
+              {variant === "dub" && hasSub ? " Try Sub." : ""}
+            </span>
+          )}
+        </div>
+
+        {/* Layout: player + right column */}
         <div className="flex flex-col md:flex-row gap-6">
+          {/* Player area */}
           <div className="flex-1 min-w-0">
             {current?.playback_id ? (
               <>
@@ -212,36 +291,7 @@ export default function AnimeWatchPage() {
                   userId={userId ?? ""}
                 />
 
-                {/* Variant toggle */}
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-sm text-slate-300">Audio:</span>
-                  <div className="inline-flex rounded-md overflow-hidden border border-blue-800">
-                    <button
-                      className={[
-                        "px-3 py-1.5 text-sm",
-                        variant === "sub"
-                          ? "bg-sky-600 text-white"
-                          : "bg-blue-900/40 hover:bg-blue-900",
-                      ].join(" ")}
-                      onClick={() => setVariant("sub")}
-                    >
-                      Sub
-                    </button>
-                    <button
-                      className={[
-                        "px-3 py-1.5 text-sm border-l border-blue-800",
-                        variant === "dub"
-                          ? "bg-sky-600 text-white"
-                          : "bg-blue-900/40 hover:bg-blue-900",
-                      ].join(" ")}
-                      onClick={() => setVariant("dub")}
-                    >
-                      Dub
-                    </button>
-                  </div>
-                </div>
-
-                {/* Prev/Next controls */}
+                {/* Prev/Next */}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(() => {
                     const idx = current ? episodes.findIndex((e) => e.id === current.id) : -1;
@@ -286,16 +336,20 @@ export default function AnimeWatchPage() {
             )}
           </div>
 
-          {/* Right column: rating + episodes */}
+          {/* Right column */}
           <div className="w-full md:w-[340px] flex-shrink-0 space-y-4">
             <AnimeInfoBox animeId={anime.id} />
             <RatingWidget animeId={anime.id} userId={userId} />
-            <EpisodeList episodes={episodes} currentId={currentId} onSelect={onSelectEpisode} posterFallback={bannerUrl ?? coverUrl}/>
+            <EpisodeList
+              episodes={episodes}
+              currentId={currentId}
+              onSelect={onSelectEpisode}
+              posterFallback={bannerUrl ?? coverUrl}
+            />
           </div>
-
-
         </div>
       </div>
     </div>
   );
 }
+
