@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../utils/supabaseClient";
 
@@ -35,6 +35,7 @@ function publicUrl(bucket: "banners" | "covers", path?: string | null) {
   if (!path) return null;
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
+
 function formatTime(sec: number | null | undefined) {
   const s = Math.max(0, Math.floor(sec ?? 0));
   const m = Math.floor(s / 60);
@@ -52,9 +53,15 @@ export default function ContinueWatchingPage() {
   // get current user
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (mounted) setUserId(data?.user?.id ?? null);
-    });
+    void supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (mounted) setUserId(data?.user?.id ?? null);
+      })
+      .catch((err) => {
+        console.error("supabase.auth.getUser error", err);
+        if (mounted) setUserId(null);
+      });
     return () => {
       mounted = false;
     };
@@ -68,7 +75,7 @@ export default function ContinueWatchingPage() {
     }
     let mounted = true;
 
-    (async () => {
+    void (async () => {
       setLoading(true);
 
       // 1) latest progress rows
@@ -103,7 +110,7 @@ export default function ContinueWatchingPage() {
         latestPerAnime.push(r);
       }
 
-      // 3) fetch anime + episodes in bulk (no FK required)
+      // 3) fetch anime + episodes in bulk
       const animeIds = latestPerAnime.map((r) => r.anime_id);
       const episodeIds = latestPerAnime.map((r) => r.episode_id);
 
@@ -115,18 +122,22 @@ export default function ContinueWatchingPage() {
               .in("id", animeIds)
           : Promise.resolve({ data: [] as Anime[] }),
         episodeIds.length
-          ? supabase
-              .from("episodes")
-              .select("id, number, title")
-              .in("id", episodeIds)
+          ? supabase.from("episodes").select("id, number, title").in("id", episodeIds)
           : Promise.resolve({ data: [] as Episode[] }),
       ]);
 
+      const animeArr = (animeRows ?? []) as Anime[];
+      const episodeArr = (episodeRows ?? []) as Episode[];
+
       const animeMap: Record<string, Anime> = {};
-      (animeRows ?? []).forEach((a: any) => (animeMap[a.id] = a));
+      for (const a of animeArr) {
+        animeMap[a.id] = a;
+      }
 
       const epMap: Record<string, Episode> = {};
-      (episodeRows ?? []).forEach((e: any) => (epMap[e.id] = e));
+      for (const e of episodeArr) {
+        epMap[e.id] = e;
+      }
 
       if (mounted) {
         setRows(latestPerAnime);
@@ -134,7 +145,10 @@ export default function ContinueWatchingPage() {
         setEpisodes(epMap);
         setLoading(false);
       }
-    })();
+    })().catch((err) => {
+      console.error("continue-watching async error", err);
+      if (mounted) setLoading(false);
+    });
 
     return () => {
       mounted = false;
@@ -188,9 +202,7 @@ export default function ContinueWatchingPage() {
                 )
               : 0;
 
-          const epNum =
-            typeof e?.number === "number" ? e.number : undefined;
-
+          const epNum = typeof e?.number === "number" ? e.number : undefined;
           const href = epNum != null ? `/anime/${a?.slug}?e=${epNum}` : `/anime/${a?.slug}`;
 
           return (
