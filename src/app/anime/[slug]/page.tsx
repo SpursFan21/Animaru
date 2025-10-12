@@ -33,51 +33,59 @@ export default function AnimeWatchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // --- User state ---
-  const [userId, setUserId] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+// --- User state ---
+const [userId, setUserId] = useState<string | null>(null);
+const [displayName, setDisplayName] = useState<string | null>(null);
+const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    async function loadUser() {
-      const { data } = await supabase.auth.getUser();
-      const user = data?.user;
-      if (!user) return;
+type ProfileRow = { username: string | null; avatar_url: string | null };
 
-      if (mounted) {
-        setUserId(user.id);
+useEffect(() => {
+  let mounted = true;
 
-        const name =
-          (user.user_metadata?.name as string | undefined) ??
-          (user.user_metadata?.full_name as string | undefined) ??
-          (user.email ? user.email.split("@")[0] : null);
+  async function loadUser() {
+    const { data } = await supabase.auth.getUser();
+    const user = data?.user;
+    if (!user || !mounted) return;
 
-        const avatar =
-          (user.user_metadata?.avatar_url as string | undefined) ?? null;
+    setUserId(user.id);
 
-        setDisplayName(name ?? null);
-        setAvatarUrl(avatar);
-      }
+    // derive from auth metadata
+    const metaName =
+      (user.user_metadata?.name as string | undefined) ??
+      (user.user_metadata?.full_name as string | undefined) ??
+      (user.email ? user.email.split("@")[0] : null);
 
-      // optional profile overrides
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("username, avatar_url")
-        .eq("id", user.id)
-        .maybeSingle();
+    const metaAvatar = (user.user_metadata?.avatar_url as string | undefined) ?? null;
 
-      if (profile && mounted) {
-        setDisplayName(profile.username ?? displayName);
-        setAvatarUrl(profile.avatar_url ?? avatarUrl);
-      }
-    }
+    // functional updates avoid deps on displayName / avatarUrl
+    setDisplayName(() => metaName ?? null);
+    setAvatarUrl(() => metaAvatar);
 
-    void loadUser();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    // optional profile overrides (typed + narrowed)
+    const { data: profileRaw } = await supabase
+      .from("profiles")
+      .select("username, avatar_url")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    // Narrow/normalize to typed values (kills `any` flow)
+    const p = (profileRaw ?? null) as ProfileRow | null;
+    const uName: string | null = p?.username ?? null;
+    const uAvatar: string | null = p?.avatar_url ?? null;
+
+    if (!mounted) return;
+    if (uName !== null) setDisplayName(() => uName);
+    if (uAvatar !== null) setAvatarUrl(() => uAvatar);
+  }
+
+  void loadUser();
+  return () => {
+    mounted = false;
+  };
+}, []);
+
+
 
   // --- Variant & episode selection ---
   const qsVariant = (searchParams.get("lang") === "dub" ? "dub" : "sub") as Variant;
@@ -224,6 +232,9 @@ export default function AnimeWatchPage() {
     );
   }
 
+  const anyVariantAvailable = (hasSub ?? false) || (hasDub ?? false);
+
+
   return (
     <div className="px-4 py-6 text-slate-100">
       <div className="max-w-7xl mx-auto">
@@ -264,13 +275,14 @@ export default function AnimeWatchPage() {
             </button>
           </div>
 
-          {episodes.length === 0 && (hasSub || hasDub) && (
+          {episodes.length === 0 && anyVariantAvailable && (
             <span className="text-xs text-slate-400 ml-2">
               {variant.toUpperCase()} has no episodes for this anime.
               {variant === "sub" && hasDub ? " Try Dub." : ""}
               {variant === "dub" && hasSub ? " Try Sub." : ""}
             </span>
           )}
+
         </div>
 
         {/* Layout: player + right column */}
