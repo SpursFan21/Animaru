@@ -1,16 +1,25 @@
 // Animaru/src/app/api/comments/[threadId]/route.ts
 
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { getDb } from "../../../../lib/mongo";
 import type { CommentDoc } from "../../../../lib/mongo";
-import { ObjectId } from "mongodb";
+import { ObjectId, type OptionalId } from "mongodb";
 
 export const dynamic = "force-dynamic";
 
 // Simple header-based auth (replace with Supabase helpers later)
-async function getUserId(req: NextRequest) {
+async function getUserId(req: NextRequest): Promise<string | null> {
   const fromHeader = req.headers.get("x-user-id");
-  return fromHeader || null;
+  return fromHeader ?? null; // use ?? to avoid lint warning
+}
+
+// Input body type
+interface CommentBody {
+  content?: string;
+  parentId?: string | null;
+  username?: string | null;
+  avatarUrl?: string | null;
 }
 
 export async function GET(
@@ -18,7 +27,6 @@ export async function GET(
   ctx: { params: Promise<{ threadId: string }> }
 ) {
   const { threadId } = await ctx.params;
-
   const { searchParams } = new URL(req.url);
   const limit = Math.min(Number(searchParams.get("limit") ?? 100), 200);
 
@@ -44,11 +52,13 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json();
-  const content: string = (body?.content ?? "").toString().trim();
-  const parentId: string | null = body?.parentId ? String(body.parentId) : null;
-  const username: string | null = body?.username ?? null;
-  const avatarUrl: string | null = body?.avatarUrl ?? null;
+  // Safely parse body
+  const body = (await req.json()) as CommentBody;
+
+  const content = (body.content ?? "").toString().trim();
+  const parentId = body.parentId ? String(body.parentId) : null;
+  const username = body.username ?? null;
+  const avatarUrl = body.avatarUrl ?? null;
 
   if (!content || content.length < 1 || content.length > 4000) {
     return NextResponse.json({ error: "Content length invalid" }, { status: 400 });
@@ -67,7 +77,7 @@ export async function POST(
   }
 
   const now = new Date();
-  const insert: CommentDoc = {
+  const insert: OptionalId<CommentDoc> = {
     threadId,
     parentId,
     path,
@@ -81,7 +91,7 @@ export async function POST(
     updatedAt: now,
   };
 
-  const res = await comments.insertOne(insert as any);
-  const saved = await comments.findOne({ _id: res.insertedId });
+  await comments.insertOne(insert);
+  const saved = await comments.findOne({ threadId, content, createdAt: now });
   return NextResponse.json({ comment: saved });
 }
