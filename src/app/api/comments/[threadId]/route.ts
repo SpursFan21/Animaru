@@ -1,11 +1,11 @@
-//Animaru\src\app\api\comments\[threadId]\route.ts
+// Animaru/src/app/api/comments/[threadId]/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/mongo";
 import type { CommentDoc } from "../../../../lib/mongo";
 import { ObjectId } from "mongodb";
 
-export const dynamic = "force-dynamic"; // avoid caching in dev
+export const dynamic = "force-dynamic";
 
 // Simple header-based auth (replace with Supabase helpers later)
 async function getUserId(req: NextRequest) {
@@ -15,15 +15,17 @@ async function getUserId(req: NextRequest) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { threadId: string } }
+  ctx: { params: Promise<{ threadId: string }> }
 ) {
+  const { threadId } = await ctx.params;
+
   const { searchParams } = new URL(req.url);
   const limit = Math.min(Number(searchParams.get("limit") ?? 100), 200);
 
   const db = await getDb();
   const docs = await db
     .collection<CommentDoc>("comments")
-    .find({ threadId: params.threadId })
+    .find({ threadId })
     .sort({ path: 1, createdAt: 1 })
     .limit(limit)
     .toArray();
@@ -33,10 +35,14 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { threadId: string } }
+  ctx: { params: Promise<{ threadId: string }> }
 ) {
+  const { threadId } = await ctx.params;
+
   const userId = await getUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const body = await req.json();
   const content: string = (body?.content ?? "").toString().trim();
@@ -54,13 +60,15 @@ export async function POST(
   let path: string[] = [];
   if (parentId) {
     const parent = await comments.findOne({ _id: new ObjectId(parentId) });
-    if (!parent) return NextResponse.json({ error: "Parent not found" }, { status: 404 });
+    if (!parent) {
+      return NextResponse.json({ error: "Parent not found" }, { status: 404 });
+    }
     path = [...parent.path, parent._id.toString()];
   }
 
   const now = new Date();
   const insert: CommentDoc = {
-    threadId: params.threadId,
+    threadId,
     parentId,
     path,
     content,
