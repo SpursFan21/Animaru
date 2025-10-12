@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../../utils/supabaseClient";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -96,12 +97,18 @@ export default function BannerSlider() {
       {/* Background + overlay */}
       {bg && (
         <>
-          <img
-            src={bg}
-            alt={current?.title ?? "Banner"}
-            className="absolute inset-0 h-full w-full object-cover object-[center_right]"
-            loading="eager"
-          />
+          <div className="absolute inset-0">
+            <Image
+              src={bg}
+              alt={current?.title ?? "Banner"}
+              fill
+              // Allow without domain config for now; add your Supabase domain to next.config.js and remove this later.
+              unoptimized
+              priority={idx === 0}
+              sizes="100vw"
+              className="object-cover object-[center_right]"
+            />
+          </div>
 
           {/* Left 40% clear → fade → heavy solid on left */}
           <div
@@ -110,13 +117,13 @@ export default function BannerSlider() {
               backgroundImage: `
                 linear-gradient(
                   90deg,
-                  rgba(23,37,84,1) 0%,      /* solid dark at far left */
-                  rgba(23,37,84,0.95) 15%,  /* heavy shading */
-                  rgba(23,37,84,0.75) 30%,  /* medium heavy */
-                  rgba(23,37,84,0.35) 40%,  /* lighter */
-                  rgba(23,37,84,0.15) 50%,  /* almost clear */
-                  rgba(23,37,84,0) 60%,     /* fully clear */
-                  rgba(23,37,84,0) 100%     /* keep clear on right side */
+                  rgba(23,37,84,1) 0%,
+                  rgba(23,37,84,0.95) 15%,
+                  rgba(23,37,84,0.75) 30%,
+                  rgba(23,37,84,0.35) 40%,
+                  rgba(23,37,84,0.15) 50%,
+                  rgba(23,37,84,0) 60%,
+                  rgba(23,37,84,0) 100%
                 )
               `,
             }}
