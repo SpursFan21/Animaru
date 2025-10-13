@@ -1,21 +1,41 @@
-//Animaru\src\app\_components\CommentsSection.tsx
-
+// src/app/_components/CommentsSection.tsx
 "use client";
 
 import useSWR from "swr";
 import { useMemo, useState } from "react";
 
-const fetcher = (url: string, userId?: string) =>
-  fetch(url, { headers: userId ? { "x-user-id": userId } : {} }).then((r) => r.json());
+/* ============================== Types ============================== */
 
 export type CommentsProps = {
-  threadId: string;          // `${animeId}:${episodeNumber}`
-  userId: string | null;     // Supabase uid (null if guest)
+  /** `${animeId}:${episodeNumber}` — sub/dub share the same thread */
+  threadId: string;
+  /** Supabase uid (null if guest) */
+  userId: string | null;
   username?: string | null;
   avatarUrl?: string | null;
 };
 
-type CommentNode = {
+type RawId = unknown; // server may return ObjectId; we normalize via toString()
+
+type RawComment = {
+  _id: RawId;
+  threadId: string;
+  parentId: string | null;
+  path: string[];
+  content: string;
+  userId: string;
+  username?: string | null;
+  avatarUrl?: string | null;
+  score: number;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
+type ApiListResponse = {
+  comments: RawComment[];
+};
+
+export type CommentNode = {
   _id: string;
   threadId: string;
   parentId: string | null;
@@ -25,60 +45,122 @@ type CommentNode = {
   username?: string | null;
   avatarUrl?: string | null;
   score: number;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string; // normalized ISO string
+  updatedAt: string; // normalized ISO string
   children?: CommentNode[];
 };
 
-export default function CommentsSection({ threadId, userId, username, avatarUrl }: CommentsProps) {
-  const { data, mutate, isLoading } = useSWR(
-    `/api/comments/${encodeURIComponent(threadId)}`,
-    (u) => fetcher(u, userId ?? undefined)
+/* ============================== Fetcher ============================== */
+
+const fetcher = async (url: string, userId?: string): Promise<ApiListResponse> => {
+  const res = await fetch(url, {
+    headers: userId ? { "x-user-id": userId } : {},
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch comments (${res.status})`);
+  }
+  return (await res.json()) as ApiListResponse;
+};
+
+/* ============================== Component ============================== */
+
+export default function CommentsSection({
+  threadId,
+  userId,
+  username,
+  avatarUrl,
+}: CommentsProps) {
+  const { data, mutate, isLoading } = useSWR<ApiListResponse, Error, [string, string | null]>(
+    [`/api/comments/${encodeURIComponent(threadId)}`, userId],
+    ([u, uid]) => fetcher(u, uid ?? undefined)
   );
 
-  const flat: CommentNode[] = (data?.comments ?? []).map((d: any) => ({
-    ...d,
-    _id: d._id?.toString?.() ?? d._id,
-  }));
+  const flat: CommentNode[] = useMemo(() => {
+    const src = data?.comments ?? [];
+    return src.map((d) => {
+      const id =
+        (typeof (d._id as { toString?: () => string } | string) === "object" &&
+          (d._id as { toString?: () => string }).toString)
+          ? (d._id as { toString: () => string }).toString()
+          : String(d._id);
 
-  // Build a tree
+      const created =
+        typeof d.createdAt === "string" ? d.createdAt : new Date(d.createdAt).toISOString();
+      const updated =
+        typeof d.updatedAt === "string" ? d.updatedAt : new Date(d.updatedAt).toISOString();
+
+      return {
+        _id: id,
+        threadId: d.threadId,
+        parentId: d.parentId,
+        path: d.path,
+        content: d.content,
+        userId: d.userId,
+        username: d.username ?? null,
+        avatarUrl: d.avatarUrl ?? null,
+        score: d.score,
+        createdAt: created,
+        updatedAt: updated,
+      };
+    });
+  }, [data]);
+
   const tree = useMemo(() => {
     const byId = new Map<string, CommentNode>();
     flat.forEach((n) => byId.set(n._id, { ...n, children: [] }));
     const roots: CommentNode[] = [];
     flat.forEach((n) => {
       const node = byId.get(n._id)!;
-      if (n.parentId && byId.get(n.parentId)) byId.get(n.parentId)!.children!.push(node);
-      else roots.push(node);
+      if (n.parentId && byId.get(n.parentId)) {
+        byId.get(n.parentId)!.children!.push(node);
+      } else {
+        roots.push(node);
+      }
     });
     return roots;
   }, [flat]);
 
-  const [newText, setNewText] = useState("");
+  const [newText, setNewText] = useState<string>("");
 
   async function submit(content: string, parentId: string | null) {
-    if (!userId) return alert("Please sign in to comment.");
+    if (!userId) {
+      alert("Please sign in to comment.");
+      return;
+    }
     const res = await fetch(`/api/comments/${encodeURIComponent(threadId)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-user-id": userId },
       body: JSON.stringify({ content, parentId, username, avatarUrl }),
     });
+
     if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      alert(j.error || "Failed to post");
+      let message = "Failed to post";
+      try {
+        const j = (await res.json()) as { error?: string };
+        message = j.error ?? message;
+      } catch {
+        // ignore
+      }
+      alert(message);
       return;
     }
+
     await mutate();
   }
 
   async function vote(commentId: string, dir: 1 | -1 | 0) {
-    if (!userId) return alert("Please sign in to vote.");
+    if (!userId) {
+      alert("Please sign in to vote.");
+      return;
+    }
     const res = await fetch("/api/comments/vote", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-user-id": userId },
       body: JSON.stringify({ commentId, direction: dir }),
     });
-    if (res.ok) await mutate();
+    if (res.ok) {
+      await mutate();
+    }
   }
 
   return (
@@ -97,7 +179,12 @@ export default function CommentsSection({ threadId, userId, username, avatarUrl 
         />
         <div className="mt-2 flex justify-end">
           <button
-            onClick={() => newText.trim() && submit(newText.trim(), null).then(() => setNewText(""))}
+            onClick={async () => {
+              const trimmed = newText.trim();
+              if (trimmed.length === 0) return;
+              await submit(trimmed, null);
+              setNewText("");
+            }}
             className="px-3 py-1.5 rounded-md bg-sky-600 text-white disabled:opacity-50"
             disabled={!userId || newText.trim().length === 0}
           >
@@ -118,7 +205,7 @@ export default function CommentsSection({ threadId, userId, username, avatarUrl 
               <CommentItem
                 key={n._id}
                 node={n}
-                onReply={(c, pid) => submit(c, pid)}
+                onReply={submit}
                 onVote={vote}
                 depth={0}
               />
@@ -130,6 +217,8 @@ export default function CommentsSection({ threadId, userId, username, avatarUrl 
   );
 }
 
+/* ============================== Item ============================== */
+
 function CommentItem({
   node,
   onReply,
@@ -137,8 +226,8 @@ function CommentItem({
   depth,
 }: {
   node: CommentNode;
-  onReply: (content: string, parentId: string) => void;
-  onVote: (id: string, dir: 1 | -1 | 0) => void;
+  onReply: (content: string, parentId: string) => Promise<void> | void;
+  onVote: (id: string, dir: 1 | -1 | 0) => Promise<void> | void;
   depth: number;
 }) {
   const [showReply, setShowReply] = useState(false);
@@ -149,13 +238,19 @@ function CommentItem({
     <li>
       <div className="flex gap-3">
         <div className="flex flex-col items-center text-slate-400">
-          <button className="px-1" onClick={() => onVote(node._id, 1)}>▲</button>
+          <button className="px-1" onClick={() => onVote(node._id, 1)}>
+            ▲
+          </button>
           <div className="text-xs text-slate-300">{node.score}</div>
-          <button className="px-1" onClick={() => onVote(node._id, -1)}>▼</button>
+          <button className="px-1" onClick={() => onVote(node._id, -1)}>
+            ▼
+          </button>
         </div>
         <div className="flex-1">
           <div className="text-sm text-slate-300">
-            <span className="font-semibold text-slate-100">{node.username || "User"}</span>
+            <span className="font-semibold text-slate-100">
+              {node.username ?? "User"}
+            </span>
             <span className="ml-2 text-xs text-slate-400">
               {new Date(node.createdAt).toLocaleString()}
             </span>
@@ -163,11 +258,17 @@ function CommentItem({
           <div className="mt-1 text-slate-200 whitespace-pre-wrap">{node.content}</div>
           <div className="mt-1 text-xs text-slate-400 flex gap-3">
             {canReply && (
-              <button className="hover:text-sky-400" onClick={() => setShowReply((s) => !s)}>
+              <button
+                className="hover:text-sky-400"
+                onClick={() => setShowReply((s) => !s)}
+              >
                 Reply
               </button>
             )}
-            <button className="hover:text-sky-400" onClick={() => onVote(node._id, 0)}>
+            <button
+              className="hover:text-sky-400"
+              onClick={() => onVote(node._id, 0)}
+            >
               Clear vote
             </button>
           </div>
@@ -185,7 +286,13 @@ function CommentItem({
                 <button
                   className="px-3 py-1.5 rounded-md bg-sky-600 text-white disabled:opacity-50"
                   disabled={text.trim().length === 0}
-                  onClick={() => text.trim() && onReply(text.trim(), node._id)}
+                  onClick={async () => {
+                    const trimmed = text.trim();
+                    if (trimmed.length === 0) return;
+                    await onReply(trimmed, node._id);
+                    setShowReply(false);
+                    setText("");
+                  }}
                 >
                   Submit
                 </button>
