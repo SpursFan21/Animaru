@@ -1,6 +1,5 @@
 //src\app\_components\EpisodeList.tsx
 
-// src/app/_components/EpisodeList.tsx
 "use client";
 
 import { useMemo } from "react";
@@ -49,7 +48,8 @@ export default function EpisodeList({
           {sorted.map((ep) => {
             const active = ep.id === currentId;
             const duration = formatDuration(ep.duration_seconds);
-            const thumb = ep.thumb_path || posterFallback || null;
+            // safer nullish coalescing operator (??)
+            const thumb = ep.thumb_path ?? posterFallback ?? null;
 
             return (
               <li key={ep.id}>
