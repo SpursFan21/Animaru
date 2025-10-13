@@ -1,11 +1,11 @@
 //Animaru\src\lib\mongo.ts
 
-import { MongoClient, Db } from "mongodb";
+import { MongoClient, type Db, type ObjectId } from "mongodb";
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
-export async function getDb() {
+export async function getDb(): Promise<Db> {
   if (db) return db;
   if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI missing");
   if (!process.env.MONGODB_DB) throw new Error("MONGODB_DB missing");
@@ -26,15 +26,15 @@ export async function getDb() {
 }
 
 export type CommentDoc = {
-  _id?: any;
-  threadId: string;              // e.g. `${animeId}:${episodeNumber}` (sub/dub share number)
+  _id?: ObjectId | string;       // replace `any` with ObjectId | string
+  threadId: string;              // `${animeId}:${episodeNumber}`
   parentId: string | null;       // parent ObjectId as string | null
-  path: string[];                // materialized ancestor path
+  path: string[];
   content: string;
   userId: string;                // Supabase auth uid
   username?: string | null;
   avatarUrl?: string | null;
-  score: number;                 // cached score
+  score: number;
   votes: Record<string, 1 | -1>; // userId -> 1/-1
   createdAt: Date;
   updatedAt: Date;
