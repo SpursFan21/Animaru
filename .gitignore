@@ -44,3 +44,6 @@ yarn-error.log*
 
 # idea files
 .idea
+
+# media videos and wav audio
+media
