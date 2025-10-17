@@ -1,6 +1,6 @@
 //extract-audio.ts
 
-import { extractAudioAll } from "./src/utils/extractAudio";
+import { extractAudioAll } from "../src/utils/extractAudio";
 
 
 (async () => {
