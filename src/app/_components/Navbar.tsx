@@ -10,11 +10,10 @@ import { supabase } from "../../utils/supabaseClient";
 import { useEffect, useRef, useState } from "react";
 import { Menu, X, Search } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 type UserMeta = { username?: string };
 
-// ---------- Pro Search ----------
 type AnimeRow = {
   id: string;
   slug: string;
@@ -22,7 +21,7 @@ type AnimeRow = {
   cover_path: string | null;
 };
 
-
+// ---------- helper: click outside ----------
 function useOutsideClose<T extends HTMLElement>(
   ref: React.RefObject<T | null>,
   onClose: () => void
@@ -38,7 +37,7 @@ function useOutsideClose<T extends HTMLElement>(
   }, [ref, onClose]);
 }
 
-
+// ---------- search component ----------
 function ProSearch({ className = "" }: { className?: string }) {
   const router = useRouter();
   const boxRef = useRef<HTMLDivElement | null>(null);
@@ -102,13 +101,11 @@ function ProSearch({ className = "" }: { className?: string }) {
     }
 
     if (q.trim().length >= 2) {
-      // Fallback: first result (if any)
       const first = rows[0];
       if (first) router.push(`/anime/${first.slug}`);
       setOpen(false);
     }
   };
-
 
   const onKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (!open && e.key !== "Escape") setOpen(true);
@@ -191,22 +188,71 @@ function ProSearch({ className = "" }: { className?: string }) {
     </div>
   );
 }
-// ---------- /Pro Search ----------
 
+// ---------- main navbar ----------
 export function Navbar() {
   const dispatch = useDispatch();
   const router = useRouter();
-
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-
   const user = useSelector<RootState, User | null>((s) => s.auth.user);
+
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Reset admin flag when user logs out or switches
+  useEffect(() => {
+    if (!user?.id) setIsAdmin(false);
+  }, [user?.id]);
+
+  // Cached admin check
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!user?.id) {
+        setIsAdmin(false);
+        return;
+      }
+      const cacheKey = `isAdmin:${user.id}`;
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached !== null) {
+        setIsAdmin(cached === "1");
+        return;
+      }
+      const { data, error } = await supabase
+        .from("admins")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!cancelled) {
+        const ok = !!data && !error;
+        setIsAdmin(ok);
+        sessionStorage.setItem(cacheKey, ok ? "1" : "0");
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const handleLogout = async () => {
     try {
       setLoggingOut(true);
+      const uid = user?.id;
+      if (uid) sessionStorage.removeItem(`isAdmin:${uid}`);
+
       await supabase.auth.signOut();
+      try {
+        await fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event: "SIGNED_OUT", session: null }),
+        });
+      } catch {}
+
       dispatch(clearUser());
+      router.push("/");
       router.refresh();
     } finally {
       setLoggingOut(false);
@@ -222,7 +268,6 @@ export function Navbar() {
 
   const meta = (user?.user_metadata ?? {}) as unknown as UserMeta;
   const usernameFromMeta = typeof meta.username === "string" ? meta.username : undefined;
-
   const displayName =
     usernameFromMeta ?? (user?.email ? user.email.split("@")[0] : undefined) ?? "Account";
 
@@ -233,47 +278,47 @@ export function Navbar() {
           Animaru
         </Link>
 
-        {/* Desktop: links + search + auth */}
+        {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-6">
           {navLinks.map((link) => (
             <Link key={link.name} href={link.href} className="hover:text-sky-300 transition">
               {link.name}
             </Link>
           ))}
-
-          {/* Pro Search */}
           <ProSearch />
 
           {user ? (
             <>
+              {isAdmin && (
+                <Link
+                  href="/admins"
+                  className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500 text-sky-300 hover:text-white"
+                >
+                  Admin
+                </Link>
+              )}
               <Link
                 href="/watchlists"
-                className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500 text-slate-200 hover:text-white"
-                title="Watchlist"
+                className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500"
               >
                 Watchlists
               </Link>
-
               <Link
                 href="/continue-watching"
-                className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500 text-slate-200 hover:text-white"
-                title="Continue Watching"
+                className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500"
               >
                 Resume
               </Link>
-
               <Link
                 href="/account"
-                className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500 text-slate-200 hover:text-white"
-                title="Account"
+                className="px-4 py-2 rounded-md border border-blue-800 hover:border-sky-500"
               >
                 {displayName}
               </Link>
-
               <button
-                onClick={() => { void handleLogout(); }}
+                onClick={() => void handleLogout()}
                 disabled={loggingOut}
-                className="px-4 py-2 bg-blue-600 hover:bg-sky-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-md"
+                className="px-4 py-2 bg-blue-600 hover:bg-sky-500 text-white rounded-md"
               >
                 {loggingOut ? "Logging out…" : "Logout"}
               </button>
@@ -294,7 +339,6 @@ export function Navbar() {
         <button
           className="md:hidden text-sky-400 focus:outline-none"
           onClick={() => setMenuOpen((v) => !v)}
-          aria-label="Toggle menu"
         >
           {menuOpen ? <X size={28} /> : <Menu size={28} />}
         </button>
@@ -304,9 +348,7 @@ export function Navbar() {
       {menuOpen && (
         <div className="md:hidden bg-blue-950 border-t border-blue-900">
           <div className="px-4 py-3 flex flex-col gap-3">
-            {/* Mobile Pro Search */}
             <ProSearch className="w-full" />
-
             {navLinks.map((link) => (
               <Link
                 key={link.name}
@@ -317,9 +359,17 @@ export function Navbar() {
                 {link.name}
               </Link>
             ))}
-
             {user ? (
               <>
+                {isAdmin && (
+                  <Link
+                    href="/admins"
+                    className="w-full px-4 py-2 rounded-md border border-blue-800 text-center hover:border-sky-500"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Admin
+                  </Link>
+                )}
                 <Link
                   href="/watchlists"
                   className="w-full px-4 py-2 rounded-md border border-blue-800 text-center hover:border-sky-500"
@@ -335,9 +385,9 @@ export function Navbar() {
                   {displayName}
                 </Link>
                 <button
-                  onClick={() => { void handleLogout(); }}
+                  onClick={() => void handleLogout()}
                   disabled={loggingOut}
-                  className="w-full px-4 py-2 bg-blue-600 hover:bg-sky-500 disabled:opacity-60 text-white rounded-md"
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-sky-500 text-white rounded-md"
                 >
                   {loggingOut ? "Logging out…" : "Logout"}
                 </button>
