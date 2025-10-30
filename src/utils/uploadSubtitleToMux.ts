@@ -1,6 +1,5 @@
 //src\utils\uploadSubtitleToMux.ts
 
-// src/utils/uploadSubtitleToMux.ts
 import dotenv from "dotenv";
 dotenv.config();
 
