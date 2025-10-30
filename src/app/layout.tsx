@@ -20,8 +20,10 @@ export default function RootLayout({
     <html lang="en" className={`${geist.variable} bg-blue-950 text-slate-100`}>
       <body className="bg-blue-950 text-slate-100 font-sans min-h-screen">
         <Provider store={store}>
+
           {/* Keeps Redux in sync with Supabase session on load & changes */}
           <AuthBootstrap />
+          
           <Navbar />
           <TRPCReactProvider>{children}</TRPCReactProvider>
           <Footer />

@@ -13,26 +13,49 @@ export default function AuthBootstrap() {
   useEffect(() => {
     let mounted = true;
 
+    const postAuthSync = async (event: string, session: any) => {
+      try {
+        await fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event, session }),
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+
     const syncInitial = async () => {
       const { data } = await supabase.auth.getSession();
-      const u = data.session?.user ?? null;
+      const session = data.session ?? null;
+      const u = session?.user ?? null;
+
       if (!mounted) return;
+
       if (u) {
         dispatch(setUser(u));
       } else {
         dispatch(clearUser());
       }
+
+      // IMPORTANT: one-shot bootstrap so server has the same cookies
+      await postAuthSync("BOOTSTRAP", session);
     };
 
-    // mark intentionally-ignored promise so eslint is happy
     void syncInitial();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null;
       if (u) {
         dispatch(setUser(u));
       } else {
         dispatch(clearUser());
+      }
+
+      // Only sync meaningful events (these come from Supabase)
+      // They won't cause client loops.
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        void postAuthSync(event, session);
       }
     });
 
