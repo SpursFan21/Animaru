@@ -2,7 +2,7 @@
 
 // src/app/api/admin/subtitles/upload/route.ts
 import { NextResponse } from "next/server";
-import { uploadSubtitleToMux } from "@/utils/uploadSubtitleToMux";
+import { uploadSubtitleToMux } from "../../../../utils/uploadSubtitleToMux";
 import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import fs from "fs/promises";

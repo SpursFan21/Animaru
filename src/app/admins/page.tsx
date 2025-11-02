@@ -5,6 +5,7 @@
 import Link from "next/link";
 import {
   Users, Ticket, Subtitles, Upload, Edit3, Database, Wrench, Shield,
+  FileText,
 } from "lucide-react";
 
 type Tile = {
@@ -15,14 +16,15 @@ type Tile = {
 };
 
 const TILES: Tile[] = [
-  { href: "/admins/users",    title: "Manage Users",    desc: "Promote, ban, reset passwords, view profiles", icon: Users },
-  { href: "/admins/tickets",  title: "Manage Tickets",  desc: "Support queue, status, assignments",           icon: Ticket },
-  { href: "/admins/subtitles",title: "Generate Subtitles", desc: "Whisper jobs, attach to Mux assets",       icon: Subtitles },
-  { href: "/admins/anime/upload", title: "Upload Anime", desc: "Create entries, upload covers/banners",      icon: Upload },
-  { href: "/admins/anime/manage", title: "Update Anime", desc: "Edit metadata, seasons, episodes",           icon: Edit3 },
-  { href: "/admins/storage",  title: "Storage",          desc: "Covers, banners, subtitles buckets",         icon: Database },
-  { href: "/admins/tools",    title: "Admin Tools",      desc: "Bulk jobs, re-index, cache bust",            icon: Wrench },
-  { href: "/admins/settings", title: "Settings",         desc: "Feature flags, API keys, roles",             icon: Shield },
+  { href: "/admins/users",     title: "Manage Users",       desc: "Promote, ban, reset passwords, view profiles", icon: Users },
+  { href: "/admins/tickets",   title: "Manage Tickets",     desc: "Support queue, status, assignments",           icon: Ticket },
+  { href: "/admins/subtitles", title: "Generate Subtitles", desc: "Process MP4 → WAV → VTT",                      icon: Subtitles },
+  { href: "/admins/subtitles/library", title: "Subtitle Library", desc: "Attach VTTs to Mux assets",               icon: FileText },
+  { href: "/admins/anime/upload", title: "Upload Anime",    desc: "Create entries, upload covers/banners",        icon: Upload },
+  { href: "/admins/anime/manage", title: "Update Anime",    desc: "Edit metadata, seasons, episodes",             icon: Edit3 },
+  { href: "/admins/storage",   title: "Storage",            desc: "Covers, banners, subtitles buckets",           icon: Database },
+  { href: "/admins/tools",     title: "Admin Tools",        desc: "Bulk jobs, re-index, cache bust",              icon: Wrench },
+  { href: "/admins/settings",  title: "Settings",           desc: "Feature flags, API keys, roles",               icon: Shield },
 ];
 
 export default function AdminHome() {
