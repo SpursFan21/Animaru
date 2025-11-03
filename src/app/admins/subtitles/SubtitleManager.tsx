@@ -224,7 +224,7 @@ export default function SubtitleManager() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-blue-800 bg-blue-900/30">
+      <div className="overflow-visible rounded-xl border border-blue-800 bg-blue-900/30">
         <div className="grid grid-cols-12 px-4 py-3 text-slate-300 text-sm border-b border-blue-800">
           <div className="col-span-6">File</div>
           <div className="col-span-2">Size</div>
@@ -237,7 +237,7 @@ export default function SubtitleManager() {
         ) : filtered.length === 0 ? (
           <div className="px-4 py-6 text-slate-400">No videos in /media/videos.</div>
         ) : (
-          <ul className="divide-y divide-blue-800">
+          <ul className="divide-y divide-blue-800 pb-24">
             {filtered.map((f) => {
               const isSel = selected === f.name;
               return (
