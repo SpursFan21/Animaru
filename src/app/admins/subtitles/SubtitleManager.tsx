@@ -391,41 +391,65 @@ export default function SubtitleManager() {
           </div>
 
           <div className="px-4 py-3 border-t border-blue-800 flex items-center justify-end gap-2">
-            <button className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60" onClick={closeWizard}>
-              Close
-            </button>
-            <button
-              className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500"
-              onClick={async (e) => {
-                e.preventDefault();
+          <button
+            className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60"
+            onClick={closeWizard}
+          >
+            Close
+          </button>
+
+          {/* Extract WAV */}
+          <button
+            className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500"
+            onClick={async (e) => {
+              e.preventDefault();
+              try {
                 await doExtract();
-              }}
-              disabled={!!wiz.wavPath}
-            >
-              1) Extract WAV
-            </button>
-            <button
-              className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500 disabled:opacity-60"
-              onClick={async (e) => {
-                e.preventDefault();
+              } catch (err: any) {
+                console.error(err);
+                alert(`Extract failed: ${err.message || err}`);
+              }
+            }}
+            disabled={!!wiz.wavPath}
+          >
+            1) Extract WAV
+          </button>
+
+          {/* Transcribe */}
+          <button
+            className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500 disabled:opacity-60"
+            onClick={async (e) => {
+              e.preventDefault();
+              try {
                 await doTranscribe();
-              }}
-              disabled={!wiz.wavPath || !!wiz.vttPath}
-            >
-              2) Transcribe → VTT
-            </button>
-            <button
-              className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500 disabled:opacity-60"
-              onClick={async (e) => {
-                e.preventDefault();
+              } catch (err: any) {
+                console.error(err);
+                alert(`Transcription failed: ${err.message || err}`);
+              }
+            }}
+            disabled={!wiz.wavPath || !!wiz.vttPath}
+          >
+            2) Transcribe → VTT
+          </button>
+
+          {/* Upload to Mux */}
+          <button
+            className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500 disabled:opacity-60"
+            onClick={async (e) => {
+              e.preventDefault();
+              try {
                 await doUpload();
-              }}
-              disabled={!wiz.vttPath || !wiz.muxAssetId || wiz.step === "done"}
-              title={!wiz.muxAssetId ? "Enter a Mux asset id" : ""}
-            >
-              3) Upload to Mux
-            </button>
-          </div>
+              } catch (err: any) {
+                console.error(err);
+                alert(`Upload failed: ${err.message || err}`);
+              }
+            }}
+            disabled={!wiz.vttPath || !wiz.muxAssetId || wiz.step === "done"}
+            title={!wiz.muxAssetId ? "Enter a Mux asset id" : ""}
+          >
+            3) Upload to Mux
+          </button>
+        </div>
         </form>
       </dialog>
     </div>

@@ -1,7 +1,7 @@
 //src/app/api/admin/subtitles/extract/route.ts
 
 import { NextResponse } from "next/server";
-import { extractAudioOne } from "@/utils/extractAudio";
+import { extractAudioOne } from "../../../../utils/extractAudio";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

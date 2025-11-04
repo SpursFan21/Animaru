@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import path from "path";
-import { transcribeWhisperVTT } from "@/utils/transcribeWhisper";
+import { transcribeWhisperVTT } from "../../../../utils/transcribeWhisper";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

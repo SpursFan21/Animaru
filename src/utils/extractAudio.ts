@@ -4,33 +4,44 @@
 //load videos you want to exract into the media/videos/ folder and then run (npx tsx extract-audio.ts) in the projects terminal to begin processing the .wav files
 //once complete the .wav files will be stored in the media/audio folder for further processing into .vtt or .srt captions
 
+// src/utils/extractAudio.ts
 import ffmpeg from "fluent-ffmpeg";
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import path from "path";
 import fs from "fs";
 
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+// Turbopack-safe: dynamically import the OS-specific ffmpeg installer at runtime
+let ffmpegLoaded = false;
+async function ensureFFmpegLoaded() {
+  if (ffmpegLoaded) return;
 
-// Prefer root /media/videos; fall back to /src/media/videos if needed.
+  const mod = await import("@ffmpeg-installer/ffmpeg"); // dynamic
+  const ffmpegInstaller: any = (mod as any).default ?? mod;
+  if (!ffmpegInstaller?.path) {
+    throw new Error("Failed to resolve @ffmpeg-installer/ffmpeg path");
+  }
+  ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+  ffmpegLoaded = true;
+}
+
 const CWD = process.cwd();
-const CANDIDATE_INPUTS: string[] = [
-  path.join(CWD, "media", "videos"),        // root/media/videos
-  path.join(CWD, "src", "media", "videos"), // src/media/videos
+const CANDIDATE_INPUTS = [
+  path.join(CWD, "media", "videos"),
+  path.join(CWD, "src", "media", "videos"),
 ];
 
 function pickExistingPath(paths: string[]): string | null {
-  for (const p of paths) {
-    if (fs.existsSync(p)) return p;
-  }
+  for (const p of paths) if (fs.existsSync(p)) return p;
   return null;
 }
 
 export async function extractAudioOne(fileName: string): Promise<string> {
+  await ensureFFmpegLoaded();
+
   const picked = pickExistingPath(CANDIDATE_INPUTS);
   if (!picked) {
     throw new Error(
       "Input folder not found. Tried:\n" +
-      CANDIDATE_INPUTS.map(p => ` - ${p}`).join("\n")
+        CANDIDATE_INPUTS.map((p) => ` - ${p}`).join("\n")
     );
   }
   const INPUT_DIR = picked;
@@ -43,7 +54,9 @@ export async function extractAudioOne(fileName: string): Promise<string> {
   }
 
   const inputPath = path.join(INPUT_DIR, fileName);
-  if (!fs.existsSync(inputPath)) throw new Error("Input video not found: " + inputPath);
+  if (!fs.existsSync(inputPath)) {
+    throw new Error("Input video not found: " + inputPath);
+  }
 
   const outName = fileName.replace(/\.mp4$/i, ".wav");
   const outputPath = path.join(OUTPUT_DIR, outName);
@@ -54,10 +67,10 @@ export async function extractAudioOne(fileName: string): Promise<string> {
       .audioChannels(1)
       .audioFrequency(16000)
       .format("wav")
-      .on("end", resolve)
-      .on("error", reject)
+      .on("end", () => resolve())
+      .on("error", (err) => reject(err))
       .save(outputPath);
   });
 
-  return outputPath; // absolute path to generated wav
+  return outputPath;
 }
