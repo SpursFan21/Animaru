@@ -1,6 +1,5 @@
 //Animaru\src\app\api\admin\subtitles\transcribe\route.ts
 
-// src/app/api/admin/subtitles/transcribe/route.ts
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -9,65 +8,127 @@ import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
 
-function run(cmd: string, args: string[]) {
-  return new Promise<void>((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: "inherit" }); // stream to server console
-    p.on("error", reject);
-    p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
+type Body = {
+  wavPath?: string;
+  model?: "tiny" | "base" | "small" | "medium" | "large-v3";
+  language?: string;
+  cli?: "whisper" | "faster-whisper";
+};
+
+function ensureDir(p: string) {
+  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+}
+
+function pickBin(cli: Body["cli"]) {
+  if (cli === "faster-whisper") {
+    // allow override if CLI name is different (e.g., faster-whisper-transcribe)
+    return process.env.FASTER_WHISPER_BIN || "faster-whisper";
+  }
+  // default: openai/whisper CLI
+  return process.env.WHISPER_BIN || "whisper";
+}
+
+async function run(bin: string, args: string[]) {
+  const stderrChunks: string[] = [];
+  const stdoutChunks: string[] = [];
+
+  const exitCode: number = await new Promise((resolve) => {
+    const p = spawn(bin, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: process.platform === "win32", // important on Windows to resolve .cmd
+      env: process.env,
+    });
+
+    p.stdout.on("data", (d) => stdoutChunks.push(d.toString()));
+    p.stderr.on("data", (d) => stderrChunks.push(d.toString()));
+    p.on("error", (err) => {
+      stderrChunks.push(String(err?.message || err));
+      resolve(127);
+    });
+    p.on("close", (code) => resolve(code ?? 1));
   });
+
+  return {
+    code: exitCode,
+    stdout: stdoutChunks.join(""),
+    stderr: stderrChunks.join(""),
+  };
 }
 
 export async function POST(req: Request) {
   try {
-    const { wavPath, model, language, cli } = (await req.json()) as {
-      wavPath?: string;
-      model?: "tiny" | "base" | "small" | "medium" | "large-v3";
-      language?: string | undefined;
-      cli?: "whisper" | "faster-whisper";
-    };
+    const { wavPath, model = "small", language, cli = "whisper" } =
+      (await req.json()) as Body;
 
     if (!wavPath) {
       return NextResponse.json({ ok: false, error: "Missing wavPath" }, { status: 400 });
     }
     if (!fs.existsSync(wavPath)) {
-      return NextResponse.json({ ok: false, error: "WAV not found" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "WAV not found on server" }, { status: 400 });
     }
 
-    // Output folder for subtitles
-    const outDir = path.join(process.cwd(), "media", "subtitles");
-    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+    // /media/subtitles beside /media/videos and /media/audio
+    const cwd = process.cwd();
+    const mediaRoot = fs.existsSync(path.join(cwd, "media"))
+      ? path.join(cwd, "media")
+      : path.join(cwd, "src", "media"); // fallback if running inside src
+    const outDir = path.join(mediaRoot, "subtitles");
+    ensureDir(outDir);
 
-    const base = path.basename(wavPath).replace(/\.[^.]+$/i, "");
+    const base = path.basename(wavPath).replace(/\.wav$/i, "");
     const vttPath = path.join(outDir, `${base}.vtt`);
 
-    const chosenCli = cli ?? "whisper";
-    if (chosenCli === "whisper") {
-      // OpenAI whisper CLI
-      // whisper <input> --model <model> --task transcribe --output_format vtt --output_dir <outDir> [--language xx]
-      const args = [
+    const bin = pickBin(cli);
+    let args: string[] = [];
+
+    if (cli === "faster-whisper") {
+      // Typical flags; install may vary
+      args = [
         wavPath,
-        "--model",
-        model ?? "small",
-        "--task",
-        "transcribe",
-        "--output_format",
-        "vtt",
-        "--output_dir",
-        outDir,
+        "--model", model,
+        "--output_format", "vtt",
+        "--output_dir", outDir,
+        "--vad_filter", "True",
       ];
-      if (language && language.trim()) args.push("--language", language.trim());
-      await run("whisper", args);
+      if (language && language.trim()) {
+        args.push("--language", language.trim());
+      }
     } else {
-      // faster-whisper CLI
-      // faster-whisper --model <model> --output_dir <outDir> --output_format vtt [--language xx] <input>
-      const args = ["--model", model ?? "small", "--output_dir", outDir, "--output_format", "vtt"];
-      if (language && language.trim()) args.push("--language", language.trim());
-      args.push(wavPath);
-      await run("faster-whisper", args);
+      // openai/whisper
+      args = [
+        wavPath,
+        "--model", model,
+        "--task", "transcribe",
+        "--output_format", "vtt",
+        "--output_dir", outDir,
+      ];
+      if (language && language.trim()) {
+        args.push("--language", language.trim());
+      }
     }
 
+    const { code, stderr, stdout } = await run(bin, args);
+
+    if (code !== 0) {
+      // surface the real reason in the response (trim to keep payload reasonable)
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Transcribe failed (exit ${code}).\n---stderr---\n${stderr.slice(0, 4000)}\n---stdout---\n${stdout.slice(0, 2000)}`,
+        },
+        { status: 500 }
+      );
+    }
+
+    // CLI may create slightly different filenames; try to detect
     if (!fs.existsSync(vttPath)) {
-      return NextResponse.json({ ok: false, error: "VTT was not produced" }, { status: 500 });
+      const maybe = fs
+        .readdirSync(outDir)
+        .find((f) => f.toLowerCase().endsWith(".vtt") && f.startsWith(base));
+      if (maybe) {
+        return NextResponse.json({ ok: true, vttPath: path.join(outDir, maybe) });
+      }
+      return NextResponse.json({ ok: false, error: "VTT not created" }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, vttPath });
