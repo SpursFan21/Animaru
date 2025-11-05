@@ -55,6 +55,9 @@ export default function SubtitleManager() {
     trackName: "English CC",
     langCode: "en",
   });
+  // auto delete wav
+  const [autoDeleteWav, setAutoDeleteWav] = useState(true);
+
   const modalRef = useRef<HTMLDialogElement>(null);
 
   const filtered = useMemo(() => {
@@ -123,10 +126,29 @@ export default function SubtitleManager() {
   }
 
   // ----- Wizard helpers -----
-  function openWizard(name: string) {
+  async function openWizard(name: string) {
     setSelected(name);
     setWiz((w) => ({ ...w, file: name, wavPath: undefined, vttPath: undefined, step: "idle" }));
     modalRef.current?.showModal();
+
+    // hydrate from disk if WAV / VTT already exist
+    try {
+      const res = await fetch("/api/admin/subtitles/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const json = await res.json();
+      if (json?.ok) {
+        setWiz((w) => ({
+          ...w,
+          wavPath: json.wav || undefined,
+          vttPath: json.vtt || undefined,
+        }));
+      }
+    } catch {
+      /* ignore hydration failure */
+    }
   }
   function closeWizard() {
     modalRef.current?.close();
@@ -166,6 +188,20 @@ export default function SubtitleManager() {
       throw new Error(json.error || "transcribe failed");
     }
     setWiz((w) => ({ ...w, vttPath: json.vttPath }));
+
+    // NEW: optional cleanup
+    if (autoDeleteWav && wiz.file) {
+      try {
+        await fetch("/api/admin/subtitles/delete-wav", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mp4Name: wiz.file }),
+        });
+        setWiz((w) => ({ ...w, wavPath: undefined }));
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   async function doUpload() {
@@ -191,7 +227,7 @@ export default function SubtitleManager() {
 
   // opening the wizard
   function onCreateSub(name: string) {
-    openWizard(name);
+    void openWizard(name);
   }
 
   return (
@@ -383,73 +419,102 @@ export default function SubtitleManager() {
             </div>
 
             {/* Status */}
-            <div className="rounded-md border border-blue-800 bg-blue-900/30 px-3 py-2 text-slate-300">
-              <div>WAV: {wiz.wavPath ? "created" : "–"}</div>
-              <div>VTT: {wiz.vttPath ? "created" : "–"}</div>
+            <div className="rounded-md border border-blue-800 bg-blue-900/30 px-3 py-2 text-slate-300 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>WAV: {wiz.wavPath ? "present" : "–"}</div>
+                {wiz.wavPath && (
+                  <button
+                    className="px-2 py-1 text-xs rounded-md border border-blue-800 hover:border-rose-500"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      try {
+                        await fetch("/api/admin/subtitles/delete-wav", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ wavPath: wiz.wavPath }),
+                        });
+                        setWiz((w) => ({ ...w, wavPath: undefined }));
+                      } catch {}
+                    }}
+                  >
+                    Delete WAV
+                  </button>
+                )}
+              </div>
+              <div>VTT: {wiz.vttPath ? "present" : "–"}</div>
               <div>Upload: {wiz.step === "done" ? "complete" : "–"}</div>
+
+              <label className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  checked={autoDeleteWav}
+                  onChange={(e) => setAutoDeleteWav(e.target.checked)}
+                />
+                <span className="text-slate-400 text-xs">Auto-delete WAV after VTT</span>
+              </label>
             </div>
           </div>
 
           <div className="px-4 py-3 border-t border-blue-800 flex items-center justify-end gap-2">
-          <button
-            className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60"
-            onClick={closeWizard}
-          >
-            Close
-          </button>
+            <button
+              className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60"
+              onClick={closeWizard}
+            >
+              Close
+            </button>
 
-          {/* Extract WAV */}
-          <button
-            className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500"
-            onClick={async (e) => {
-              e.preventDefault();
-              try {
-                await doExtract();
-              } catch (err: any) {
-                console.error(err);
-                alert(`Extract failed: ${err.message || err}`);
-              }
-            }}
-            disabled={!!wiz.wavPath}
-          >
-            1) Extract WAV
-          </button>
+            {/* Extract WAV */}
+            <button
+              className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500"
+              onClick={async (e) => {
+                e.preventDefault();
+                try {
+                  await doExtract();
+                } catch (err: any) {
+                  console.error(err);
+                  alert(`Extract failed: ${err.message || err}`);
+                }
+              }}
+              disabled={!!wiz.wavPath}
+            >
+              1) Extract WAV
+            </button>
 
-          {/* Transcribe */}
-          <button
-            className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500 disabled:opacity-60"
-            onClick={async (e) => {
-              e.preventDefault();
-              try {
-                await doTranscribe();
-              } catch (err: any) {
-                console.error(err);
-                alert(`Transcription failed: ${err.message || err}`);
-              }
-            }}
-            disabled={!wiz.wavPath || !!wiz.vttPath}
-          >
-            2) Transcribe → VTT
-          </button>
+            {/* Transcribe */}
+            <button
+              className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500 disabled:opacity-60"
+              onClick={async (e) => {
+                e.preventDefault();
+                try {
+                  await doTranscribe();
+                } catch (err: any) {
+                  console.error(err);
+                  alert(`Transcription failed: ${err.message || err}`);
+                }
+              }}
+              disabled={!wiz.wavPath || !!wiz.vttPath}
+            >
+              2) Transcribe → VTT
+            </button>
 
-          {/* Upload to Mux */}
-          <button
-            className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500 disabled:opacity-60"
-            onClick={async (e) => {
-              e.preventDefault();
-              try {
-                await doUpload();
-              } catch (err: any) {
-                console.error(err);
-                alert(`Upload failed: ${err.message || err}`);
-              }
-            }}
-            disabled={!wiz.vttPath || !wiz.muxAssetId || wiz.step === "done"}
-            title={!wiz.muxAssetId ? "Enter a Mux asset id" : ""}
-          >
-            3) Upload to Mux
-          </button>
-        </div>
+            {/* Upload to Mux */}
+            <button
+              className="px-3 py-1.5 rounded-md border border-blue-800 bg-blue-900/60 hover:border-sky-500 disabled:opacity-60"
+              onClick={async (e) => {
+                e.preventDefault();
+                try {
+                  await doUpload();
+                } catch (err: any) {
+                  console.error(err);
+                  alert(`Upload failed: ${err.message || err}`);
+                }
+              }}
+              disabled={!wiz.vttPath || !wiz.muxAssetId || wiz.step === "done"}
+              title={!wiz.muxAssetId ? "Enter a Mux asset id" : ""}
+            >
+              3) Upload to Mux
+            </button>
+          </div>
         </form>
       </dialog>
     </div>
