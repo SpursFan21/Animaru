@@ -172,6 +172,7 @@ export default function SubtitleManager() {
   async function doTranscribe() {
     if (!wiz.wavPath) throw new Error("no wav yet");
     setWiz((w) => ({ ...w, step: "transcribe" }));
+
     const res = await fetch("/api/admin/subtitles/transcribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -182,14 +183,24 @@ export default function SubtitleManager() {
         cli: wiz.cli,
       }),
     });
+
     const json = await res.json();
+
+    // ---- Show full diagnostics if backend reports failure ----
     if (!json.ok) {
       setWiz((w) => ({ ...w, step: "idle" }));
-      throw new Error(json.error || "transcribe failed");
+      const extra: string =
+        json.details ??
+        json.stderr ??
+        json.stdout ??
+        "";
+      throw new Error(`${json.error || "transcribe failed"}${extra ? "\n\n" + extra : ""}`);
     }
-    setWiz((w) => ({ ...w, vttPath: json.vttPath }));
 
-    // NEW: optional cleanup
+    // success path
+    setWiz((w) => ({ ...w, vttPath: json.vttPath as string }));
+
+    // optional cleanup
     if (autoDeleteWav && wiz.file) {
       try {
         await fetch("/api/admin/subtitles/delete-wav", {
@@ -203,6 +214,7 @@ export default function SubtitleManager() {
       }
     }
   }
+
 
   async function doUpload() {
     if (!wiz.vttPath || !wiz.muxAssetId) return;
