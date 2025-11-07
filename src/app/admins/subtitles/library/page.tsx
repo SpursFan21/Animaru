@@ -1,6 +1,5 @@
 //Animaru\src\app\admins\subtitles\library\page.tsx
 
-// src/app/admins/subtitles/library/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -8,16 +7,17 @@ import AdminShell from "../../_components/AdminShell";
 
 type VttFile = {
   name: string;
-  key: string;
+  key: string;                // "sb:..." or "local:..."
   size: number;
   updatedAt: string | null;
-  publicUrl: string | null;
+  publicUrl: string | null;   // may be null for local rows
+  source: "supabase" | "local";
 };
 
 export default function VttLibraryPage() {
   const [files, setFiles] = useState<VttFile[]>([]);
   const [q, setQ] = useState("");
-  const [busy, setBusy] = useState<string | null>(null); // key currently attaching
+  const [busy, setBusy] = useState<string | null>(null);
   const [lang, setLang] = useState("en");
   const [trackName, setTrackName] = useState("English CC");
   const [assetId, setAssetId] = useState("");
@@ -25,14 +25,18 @@ export default function VttLibraryPage() {
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return files;
-    return files.filter(f => f.name.toLowerCase().includes(t));
+    return files.filter((f) => f.name.toLowerCase().includes(t));
   }, [files, q]);
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/admin/subtitles/list");
-      const json = await res.json();
-      if (json.ok) setFiles(json.files);
+      try {
+        const res = await fetch("/api/admin/subtitles/list");
+        const json = await res.json();
+        if (json.ok) setFiles(json.files);
+      } catch {
+        setFiles([]);
+      }
     })();
   }, []);
 
@@ -50,7 +54,7 @@ export default function VttLibraryPage() {
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "Attach failed");
-      alert(`Attached: ${key} → ${assetId}`);
+      alert(`Attached ${key} to asset ${assetId}`);
     } catch (e: any) {
       alert(e.message);
     } finally {
@@ -58,13 +62,17 @@ export default function VttLibraryPage() {
     }
   }
 
+  function fmtSize(n: number) {
+    if (n < 1024) return `${n} B`;
+    const kb = n / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    const mb = kb / 1024;
+    return `${mb.toFixed(1)} MB`;
+    }
+
   return (
-    <AdminShell
-      title="Subtitle Library"
-      subtitle="Pick a VTT and attach it to a Mux asset."
-    >
+    <AdminShell title="Subtitle Library" subtitle="Pick a VTT and attach it to a Mux asset.">
       <div className="space-y-3">
-        {/* global controls */}
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <label className="flex-1">
             <div className="text-sm text-slate-300 mb-1">Mux Asset ID</div>
@@ -72,7 +80,7 @@ export default function VttLibraryPage() {
               className="w-full rounded-md border border-blue-800 bg-blue-900/60 px-3 py-2"
               value={assetId}
               onChange={(e) => setAssetId(e.target.value)}
-              placeholder="e.g. 5v02hQpK2rI8KJZq2l01sYxS1..."
+              placeholder="mux asset id"
             />
           </label>
           <label>
@@ -105,20 +113,21 @@ export default function VttLibraryPage() {
           />
         </div>
 
-        {/* table */}
         <div className="overflow-hidden rounded-xl border border-blue-800 bg-blue-900/30">
           <div className="grid grid-cols-12 px-4 py-3 text-slate-300 text-sm border-b border-blue-800">
             <div className="col-span-6">VTT file</div>
             <div className="col-span-2">Size</div>
-            <div className="col-span-3">Updated</div>
+            <div className="col-span-2">Source</div>
+            <div className="col-span-1">Updated</div>
             <div className="col-span-1 text-right">Attach</div>
           </div>
           <ul className="divide-y divide-blue-800">
-            {filtered.map(f => (
+            {filtered.map((f) => (
               <li key={f.key} className="px-4 py-3 grid grid-cols-12 items-center gap-2">
                 <div className="col-span-6 truncate">{f.name}</div>
-                <div className="col-span-2">{(f.size/1024).toFixed(1)} KB</div>
-                <div className="col-span-3">{f.updatedAt ? new Date(f.updatedAt).toLocaleString() : "—"}</div>
+                <div className="col-span-2">{fmtSize(f.size)}</div>
+                <div className="col-span-2 capitalize">{f.source}</div>
+                <div className="col-span-1">{f.updatedAt ? new Date(f.updatedAt).toLocaleString() : "—"}</div>
                 <div className="col-span-1 flex justify-end">
                   <button
                     onClick={() => attach(f.key)}
