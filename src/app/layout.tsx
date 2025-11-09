@@ -10,6 +10,7 @@ import { Provider } from "react-redux";
 import { Navbar } from "./_components/Navbar";
 import { Footer } from "./_components/Footer";
 import AuthBootstrap from "./_components/AuthBootstrap";
+import { Toaster } from "sonner";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 
@@ -26,6 +27,7 @@ export default function RootLayout({
           
           <Navbar />
           <TRPCReactProvider>{children}</TRPCReactProvider>
+          <Toaster richColors position="top-right" />
           <Footer />
         </Provider>
       </body>
