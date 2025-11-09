@@ -25,39 +25,39 @@ export default function AuthBootstrap() {
       }
     };
 
-    const syncInitial = async () => {
+    // IMPORTANT: do NOT clear the user here if session is null.
+    // We only "set" eagerly if a session already exists.
+    const bootstrap = async () => {
       const { data } = await supabase.auth.getSession();
       const session = data.session ?? null;
-      const u = session?.user ?? null;
-
       if (!mounted) return;
 
-      if (u) {
-        dispatch(setUser(u));
-      } else {
-        dispatch(clearUser());
+      if (session?.user) {
+        dispatch(setUser(session.user));
       }
-
-      // IMPORTANT: one-shot bootstrap so server has the same cookies
+      // Always sync cookies on first load so server can read them
       await postAuthSync("BOOTSTRAP", session);
     };
 
-    void syncInitial();
+    void bootstrap();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      const u = session?.user ?? null;
-      if (u) {
-        dispatch(setUser(u));
-      } else {
-        dispatch(clearUser());
-      }
+    // Let INITIAL_SESSION / SIGNED_IN / TOKEN_REFRESHED be the single source of truth.
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        const user = session?.user ?? null;
 
-      // Only sync meaningful events (these come from Supabase)
-      // They won't cause client loops.
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-        void postAuthSync(event, session);
+        if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+          if (user) dispatch(setUser(user));
+          else dispatch(clearUser());
+          void postAuthSync(event, session);
+        }
+
+        if (event === "SIGNED_OUT") {
+          dispatch(clearUser());
+          void postAuthSync(event, session);
+        }
       }
-    });
+    );
 
     return () => {
       mounted = false;
