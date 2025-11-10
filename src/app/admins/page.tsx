@@ -3,6 +3,8 @@
 "use client";
 
 import Link from "next/link";
+import { Video } from "lucide-react";
+
 import {
   Users, Ticket, Subtitles, Upload, Edit3, Database, Wrench, Shield,
   FileText,
@@ -22,6 +24,7 @@ const TILES: Tile[] = [
   { href: "/admins/subtitles/library", title: "Subtitle Library", desc: "Attach VTTs to Mux assets",               icon: FileText },
   { href: "/admins/upload", title: "Upload Anime",    desc: "Create entries, upload covers/banners",        icon: Upload },
   { href: "/admins/manage", title: "Update Anime",    desc: "Edit metadata, seasons, anime details, images",             icon: Edit3 },
+  { href: "/admins/episodes", title: "Manage Episodes", desc: "Create & edit, upload to Mux", icon: Video },
   { href: "/admins/storage",   title: "Storage",            desc: "Covers, banners, subtitles buckets",           icon: Database },
   { href: "/admins/tools",     title: "Admin Tools",        desc: "Bulk jobs, re-index, cache bust",              icon: Wrench },
   { href: "/admins/settings",  title: "Settings",           desc: "Feature flags, API keys, roles",               icon: Shield },
