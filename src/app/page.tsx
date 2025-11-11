@@ -18,7 +18,6 @@ type Anime = {
   season: string | null;
   year: number | null;
   updated_at: string | null;
-  // banner_path?: string | null;
 };
 
 function coverUrl(path: string | null | undefined) {
@@ -37,25 +36,89 @@ export default function Home() {
 
   useEffect(() => {
     let mounted = true;
+
+      const loadPopular = async (): Promise<Anime[]> => {
+      // 1) read picks (be tolerant about order column name)
+      const { data: picks, error: picksErr } = await supabase
+        .from("popular_rotation")
+        .select("*") // tolerate unknown order column name
+        .limit(10);
+
+      if (picksErr) {
+        console.error("popular_rotation error:", picksErr);
+        throw picksErr;
+      }
+      if (!picks || picks.length === 0) return [];
+
+      // 2) normalize order field and sort
+      const normalized = picks
+        .map((p: any) => ({
+          anime_id: p.anime_id,
+          ord:
+            p.order_position ??
+            p.order_index ??
+            p.order ??
+            0, // default so sort is stable
+        }))
+        .sort((a: any, b: any) => a.ord - b.ord);
+
+      const ids = normalized.map((p: any) => p.anime_id);
+
+      // 3) fetch anime rows
+      const { data: rows, error: rowsErr } = await supabase
+        .from("anime")
+        .select(
+          "id, slug, title, synopsis, cover_path, genres, season, year, updated_at"
+        )
+        .in("id", ids);
+
+      if (rowsErr) {
+        console.error("anime fetch error:", rowsErr);
+        throw rowsErr;
+      }
+
+      // 4) return in selected order
+      const byId = new Map((rows ?? []).map((r) => [r.id, r]));
+      const ordered = ids.map((id) => byId.get(id)).filter(Boolean) as Anime[];
+      return ordered;
+    };
+
+
+    const loadFallback = async (): Promise<Anime[]> => {
+      const { data, error } = await supabase
+        .from("anime")
+        .select(
+          "id, slug, title, synopsis, cover_path, genres, season, year, updated_at"
+        )
+        .order("updated_at", { ascending: false })
+        .limit(12);
+      if (error) throw error;
+      return (data ?? []) as Anime[];
+    };
+
     const run = async () => {
       setLoading(true);
       setErr(null);
       try {
-        const { data, error } = await supabase
-          .from("anime")
-          .select(
-            "id, slug, title, synopsis, cover_path, genres, season, year, updated_at"
-            // add "banner_path" here if column is added later
-          )
-          .order("updated_at", { ascending: false })
-          .limit(12);
-
-        if (error) throw error;
+        let list = await loadPopular();
+        if (list.length === 0) {
+          // fallback to recent if rotation is empty
+          list = await loadFallback();
+        }
         if (!mounted) return;
-        setAnime((data ?? []) as Anime[]);
+        setAnime(list);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load anime.";
         setErr(msg);
+        if (!mounted) return;
+        // also fallback to recent if popular fetch failed
+        try {
+          const fallback = await loadFallback();
+          if (!mounted) return;
+          setAnime(fallback);
+        } catch {
+          // ignore, keep error visible
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -112,7 +175,6 @@ export default function Home() {
                 const url = coverUrl(a.cover_path);
                 return (
                   <li key={a.id} className="h-full">
-                    {/* Open modal instead of navigating */}
                     <button
                       type="button"
                       onClick={() => {
@@ -122,7 +184,6 @@ export default function Home() {
                           title: a.title,
                           synopsis: a.synopsis,
                           cover_path: a.cover_path,
-                          // banner_path: a.banner_path ?? null, // uncomment if you add the column
                           genres: a.genres,
                           season: a.season,
                           year: a.year,
@@ -133,7 +194,6 @@ export default function Home() {
                       }}
                       className="group block h-full w-full rounded-lg overflow-hidden border border-blue-800 bg-blue-900/60 hover:border-sky-500 transition flex flex-col text-left"
                     >
-                      {/* Poster: fixed 2:3 aspect so all cards align */}
                       <div className="relative w-full aspect-[2/3]">
                         {url ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -150,7 +210,6 @@ export default function Home() {
                         )}
                       </div>
 
-                      {/* Title only; consistent two-line height */}
                       <div className="p-3">
                         <h3 className="font-semibold leading-snug line-clamp-2 min-h-[3rem] group-hover:text-sky-300">
                           {a.title}
@@ -174,4 +233,3 @@ export default function Home() {
     </main>
   );
 }
-
