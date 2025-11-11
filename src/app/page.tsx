@@ -7,6 +7,7 @@ import Link from "next/link";
 import { supabase } from "../utils/supabaseClient";
 import BannerSlider from "./_components/BannerSlider";
 import AnimeModal, { type AnimeForModal } from "./_components/AnimeModal";
+import RecommendedForYou from "./_components/RecommendedForYou";
 
 type Anime = {
   id: string;
@@ -223,6 +224,10 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {/* Recommended for the signed-in user */}
+      <RecommendedForYou />
+
 
       {/* Modal */}
       <AnimeModal
