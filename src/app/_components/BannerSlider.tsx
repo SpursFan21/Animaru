@@ -1,4 +1,5 @@
 // src/app/_components/BannerSlider.tsx
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -15,12 +16,16 @@ type Slide = {
   banner_path: string | null;
 };
 
-type AnimeRow = {
-  id: string;
-  slug: string;
-  title: string;
-  synopsis: string | null;
-  banner_path: string | null;
+/** Row returned from banner_slots join */
+type SlotRow = {
+  sort_order: number;
+  anime: {
+    id: string;
+    slug: string;
+    title: string;
+    synopsis: string | null;
+    banner_path: string | null;
+  } | null;
 };
 
 function bannerUrl(path: string | null | undefined) {
@@ -35,28 +40,57 @@ export default function BannerSlider() {
 
   useEffect(() => {
     let mounted = true;
+
     const load = async () => {
+      // 1) Read the curated rotation from banner_slots (ordered 1..5)
       const { data, error } = await supabase
-        .from("anime")
-        .select("id, slug, title, synopsis, banner_path, updated_at")
-        .not("banner_path", "is", null)
-        .order("updated_at", { ascending: false })
+        .from("banner_slots")
+        .select(
+          "sort_order, anime:anime ( id, slug, title, synopsis, banner_path )"
+        )
+        .order("sort_order", { ascending: true })
         .limit(5)
-        .returns<AnimeRow[]>();
+        .returns<SlotRow[]>();
 
       if (!mounted) return;
+
       if (error || !data) {
         setSlides([]);
         return;
       }
 
-      const mapped: Slide[] = data.map((r) => ({
-        id: r.id,
-        slug: r.slug,
-        title: r.title,
-        tagline: r.synopsis ?? "",
-        banner_path: r.banner_path,
-      }));
+      // 2) Map to the slider’s Slide type (ignore empty/missing banners)
+      const mapped: Slide[] = data
+        .filter((r) => r.anime && r.anime.banner_path) // needs a banner
+        .map((r) => ({
+          id: r.anime!.id,
+          slug: r.anime!.slug,
+          title: r.anime!.title,
+          tagline: r.anime!.synopsis ?? "",
+          banner_path: r.anime!.banner_path,
+        }));
+
+      // If the curated list is empty, fall back to latest 5 anime with banners
+      if (mapped.length === 0) {
+        const fallback = await supabase
+          .from("anime")
+          .select("id, slug, title, synopsis, banner_path, updated_at")
+          .not("banner_path", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(5);
+
+        const fb = (fallback.data ?? []).map((r: any) => ({
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          tagline: r.synopsis ?? "",
+          banner_path: r.banner_path,
+        })) as Slide[];
+
+        setSlides(fb);
+        setIdx(0);
+        return;
+      }
 
       setSlides(mapped);
       setIdx(0);
@@ -71,7 +105,10 @@ export default function BannerSlider() {
   useEffect(() => {
     if (slides.length <= 1) return;
     if (timer.current) clearInterval(timer.current);
-    timer.current = setInterval(() => setIdx((i) => (i + 1) % slides.length), 6000);
+    timer.current = setInterval(
+      () => setIdx((i) => (i + 1) % slides.length),
+      6000
+    );
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
@@ -102,7 +139,6 @@ export default function BannerSlider() {
               src={bg}
               alt={current?.title ?? "Banner"}
               fill
-              // Allow without domain config for now; add your Supabase domain to next.config.js and remove this later.
               unoptimized
               priority={idx === 0}
               sizes="100vw"

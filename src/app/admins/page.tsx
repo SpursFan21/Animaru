@@ -25,6 +25,7 @@ const TILES: Tile[] = [
   { href: "/admins/upload", title: "Upload Anime",    desc: "Create entries, upload covers/banners",        icon: Upload },
   { href: "/admins/manage", title: "Update Anime",    desc: "Edit metadata, seasons, anime details, images",             icon: Edit3 },
   { href: "/admins/episodes", title: "Manage Episodes", desc: "Create & edit, upload to Mux", icon: Video },
+  { href: "/admins/banners", title: "Banner Manager", desc: "Pick 5, order 1–5", icon: Video },
   { href: "/admins/storage",   title: "Storage",            desc: "Covers, banners, subtitles buckets",           icon: Database },
   { href: "/admins/tools",     title: "Admin Tools",        desc: "Bulk jobs, re-index, cache bust",              icon: Wrench },
   { href: "/admins/settings",  title: "Settings",           desc: "Feature flags, API keys, roles",               icon: Shield },
