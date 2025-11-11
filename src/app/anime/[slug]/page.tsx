@@ -11,6 +11,8 @@ import type { Episode } from "../../_components/EpisodeList";
 import CommentsSection from "../../_components/CommentsSection";
 import RatingWidget from "../../_components/RatingWidget";
 import AnimeInfoBox from "../../_components/AnimeInfoBox";
+import SimilarAnime from "../../_components/SimilarAnime";
+
 
 type Anime = {
   id: string;
@@ -340,6 +342,10 @@ useEffect(() => {
                   username={displayName}
                   avatarUrl={avatarUrl}
                 />
+
+                {/* Similar titles (by shared genres) */}
+                <SimilarAnime currentSlug={params.slug} />
+
               </>
             ) : (
               <div className="aspect-video rounded-xl border border-blue-800 bg-blue-950 grid place-items-center">
