@@ -1,14 +1,20 @@
 //src\app\admins\users\page.tsx
 
-import AdminHeader from "../_components/AdminShell";
+import AdminShell from "../_components/AdminShell";
+import { listUsersAction } from "./actions";
+import ManageUsersClient from "./ManageUsersClient";
 
-export default function UsersPage() {
+export const metadata = { title: "Manage Users | Admin" };
+
+export default async function Page() {
+  const users = await listUsersAction();
+
   return (
-    <main>
-      <AdminHeader title="Manage Users" subtitle="Promote, ban, reset passwords (coming soon)" />
-      <div className="rounded-xl border border-blue-800 bg-blue-900/40 p-4">
-        <p className="text-slate-300">Placeholder screen. Build user table & actions here.</p>
-      </div>
-    </main>
+    <AdminShell
+      title="Manage Users"
+      subtitle="Promote, ban, reset passwords, view profiles."
+    >
+      <ManageUsersClient initialUsers={users} />
+    </AdminShell>
   );
 }
