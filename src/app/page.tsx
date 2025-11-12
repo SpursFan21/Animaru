@@ -8,6 +8,7 @@ import { supabase } from "../utils/supabaseClient";
 import BannerSlider from "./_components/BannerSlider";
 import AnimeModal, { type AnimeForModal } from "./_components/AnimeModal";
 import RecommendedForYou from "./_components/RecommendedForYou";
+import TrendingSidebar from "./_components/TrendingSidebar";
 
 type Anime = {
   id: string;
@@ -38,11 +39,10 @@ export default function Home() {
   useEffect(() => {
     let mounted = true;
 
-      const loadPopular = async (): Promise<Anime[]> => {
-      // 1) read picks (be tolerant about order column name)
+    const loadPopular = async (): Promise<Anime[]> => {
       const { data: picks, error: picksErr } = await supabase
         .from("popular_rotation")
-        .select("*") // tolerate unknown order column name
+        .select("*")
         .limit(10);
 
       if (picksErr) {
@@ -51,21 +51,15 @@ export default function Home() {
       }
       if (!picks || picks.length === 0) return [];
 
-      // 2) normalize order field and sort
       const normalized = picks
         .map((p: any) => ({
           anime_id: p.anime_id,
-          ord:
-            p.order_position ??
-            p.order_index ??
-            p.order ??
-            0, // default so sort is stable
+          ord: p.order_position ?? p.order_index ?? p.order ?? 0,
         }))
         .sort((a: any, b: any) => a.ord - b.ord);
 
       const ids = normalized.map((p: any) => p.anime_id);
 
-      // 3) fetch anime rows
       const { data: rows, error: rowsErr } = await supabase
         .from("anime")
         .select(
@@ -78,12 +72,10 @@ export default function Home() {
         throw rowsErr;
       }
 
-      // 4) return in selected order
       const byId = new Map((rows ?? []).map((r) => [r.id, r]));
       const ordered = ids.map((id) => byId.get(id)).filter(Boolean) as Anime[];
       return ordered;
     };
-
 
     const loadFallback = async (): Promise<Anime[]> => {
       const { data, error } = await supabase
@@ -102,23 +94,19 @@ export default function Home() {
       setErr(null);
       try {
         let list = await loadPopular();
-        if (list.length === 0) {
-          // fallback to recent if rotation is empty
-          list = await loadFallback();
-        }
+        if (list.length === 0) list = await loadFallback();
         if (!mounted) return;
         setAnime(list);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load anime.";
         setErr(msg);
         if (!mounted) return;
-        // also fallback to recent if popular fetch failed
         try {
           const fallback = await loadFallback();
           if (!mounted) return;
           setAnime(fallback);
         } catch {
-          // ignore, keep error visible
+          /* keep error visible */
         }
       } finally {
         if (mounted) setLoading(false);
@@ -132,7 +120,7 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="bg-blue-950 text-slate-100 min-h-screen">
+    <main className="bg-blue-950 text-slate-100 min-h-screen overflow-x-hidden">
       {/* Full-bleed Banner */}
       <section
         className="
@@ -143,91 +131,118 @@ export default function Home() {
         <BannerSlider />
       </section>
 
-      {/* Popular / Trending */}
-      <section className="max-w-7xl mx-auto px-4 py-10">
-        <div className="flex items-baseline justify-between mb-6">
-          <h2 className="text-3xl font-bold">Popular Anime</h2>
-          <Link href="/anime" className="text-sky-400 hover:underline">
-            View all
-          </Link>
-        </div>
+      {/* Content: keep main at exact 7xl width, add a separate 320px sidebar lane */}
+      <section
+        className="
+          mx-auto px-4 py-10
+          lg:max-w-[calc(80rem+360px)]  /* 80rem main + 320px sidebar + ~40px gap */
+        "
+      >
+        <div
+          className="
+            lg:grid lg:grid-cols-[minmax(0,80rem)_320px]
+            lg:gap-6 lg:justify-center
+          "
+        >
+          {/* MAIN (locked to the same width as before) */}
+          <div className="lg:w-[80rem] space-y-10">
+            {/* Popular */}
+            <div>
+              <div className="flex items-baseline justify-between mb-6">
+                <h2 className="text-3xl font-bold">Popular Anime</h2>
+                <Link href="/anime" className="text-sky-400 hover:underline">
+                  View all
+                </Link>
+              </div>
 
-        <div className="rounded-2xl bg-blue-900/40 border border-blue-800 p-4">
-          {err && (
-            <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-              {err}
+              <div className="rounded-2xl bg-blue-900/40 border border-blue-800 p-4">
+                {err && (
+                  <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                    {err}
+                  </div>
+                )}
+
+                {loading ? (
+                  <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="rounded-lg bg-blue-900/60 border border-blue-800 animate-pulse aspect-[2/3]"
+                      />
+                    ))}
+                  </div>
+                ) : anime.length === 0 ? (
+                  <p className="text-slate-300">No anime yet. Add some in the admin!</p>
+                ) : (
+                  <ul className="grid gap-6 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
+                    {anime.map((a) => {
+                      const url = coverUrl(a.cover_path);
+                      return (
+                        <li key={a.id} className="h-full">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const payload: AnimeForModal = {
+                                id: a.id,
+                                slug: a.slug,
+                                title: a.title,
+                                synopsis: a.synopsis,
+                                cover_path: a.cover_path,
+                                genres: a.genres,
+                                season: a.season,
+                                year: a.year,
+                                episodes: null,
+                              };
+                              setModalAnime(payload);
+                              setModalOpen(true);
+                            }}
+                            className="group block h-full w-full rounded-lg overflow-hidden border border-blue-800 bg-blue-900/60 hover:border-sky-500 transition flex flex-col text-left"
+                          >
+                            <div className="relative w-full aspect-[2/3]">
+                              {url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={url}
+                                  alt={a.title}
+                                  className="absolute inset-0 h-full w-full object-cover group-hover:opacity-95"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="absolute inset-0 grid place-items-center text-slate-400">
+                                  No image
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="p-3">
+                              <h3 className="font-semibold leading-snug line-clamp-2 min-h-[3rem] group-hover:text-sky-300">
+                                {a.title}
+                              </h3>
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {/* Trending only on mobile/tablet (below Popular) */}
+              <div className="lg:hidden mt-6">
+                <TrendingSidebar />
+              </div>
             </div>
-          )}
 
-          {loading ? (
-            <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg bg-blue-900/60 border border-blue-800 animate-pulse aspect-[2/3]"
-                />
-              ))}
-            </div>
-          ) : anime.length === 0 ? (
-            <p className="text-slate-300">No anime yet. Add some in the admin!</p>
-          ) : (
-            <ul className="grid gap-6 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
-              {anime.map((a) => {
-                const url = coverUrl(a.cover_path);
-                return (
-                  <li key={a.id} className="h-full">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const payload: AnimeForModal = {
-                          id: a.id,
-                          slug: a.slug,
-                          title: a.title,
-                          synopsis: a.synopsis,
-                          cover_path: a.cover_path,
-                          genres: a.genres,
-                          season: a.season,
-                          year: a.year,
-                          episodes: null,
-                        };
-                        setModalAnime(payload);
-                        setModalOpen(true);
-                      }}
-                      className="group block h-full w-full rounded-lg overflow-hidden border border-blue-800 bg-blue-900/60 hover:border-sky-500 transition flex flex-col text-left"
-                    >
-                      <div className="relative w-full aspect-[2/3]">
-                        {url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={url}
-                            alt={a.title}
-                            className="absolute inset-0 h-full w-full object-cover group-hover:opacity-95"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="absolute inset-0 grid place-items-center text-slate-400">
-                            No image
-                          </div>
-                        )}
-                      </div>
+            {/* Recommended for you (keeps full 7xl width) */}
+            <RecommendedForYou />
+          </div>
 
-                      <div className="p-3">
-                        <h3 className="font-semibold leading-snug line-clamp-2 min-h-[3rem] group-hover:text-sky-300">
-                          {a.title}
-                        </h3>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          {/* SIDEBAR (fixed 320px lane, desktop only) */}
+          <aside className="hidden lg:block">
+            <TrendingSidebar />
+          </aside>
         </div>
       </section>
-
-      {/* Recommended for the signed-in user */}
-      <RecommendedForYou />
-
 
       {/* Modal */}
       <AnimeModal
@@ -237,4 +252,5 @@ export default function Home() {
       />
     </main>
   );
+
 }
