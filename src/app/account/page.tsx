@@ -1,6 +1,5 @@
-//src/app/account/page.tsx
+//Animaru\src\app\account\page.tsx
 
-// src/app/account/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,7 +9,7 @@ import type { RootState } from "../../redux/store";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "../../utils/supabaseClient";
 import { Button } from "../../components/ui/button";
-import { User as UserIcon, Mail, Lock } from "lucide-react";
+import { User as UserIcon, Mail, Lock, AlertTriangle } from "lucide-react";
 
 type Profile = {
   username: string | null;
@@ -35,6 +34,11 @@ export default function AccountPage() {
   const [pwMsg, setPwMsg] = useState<string | null>(null);
   const [pwErr, setPwErr] = useState<string | null>(null);
 
+  // Deactivate account state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+
   const displayEmail = user?.email ?? "";
   const userId = user?.id;
 
@@ -47,47 +51,47 @@ export default function AccountPage() {
   }, [user, router]);
 
   // Fetch profile when we have a user
-useEffect(() => {
-  if (!userId) return;
+  useEffect(() => {
+    if (!userId) return;
 
-  let mounted = true;
-  const run = async () => {
-    setLoadingProfile(true);
-    setSaveErr(null);
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("username, avatar_url, created_at")
-        .eq("id", userId)
-        .single(); // returns one row or error
+    let mounted = true;
+    const run = async () => {
+      setLoadingProfile(true);
+      setSaveErr(null);
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("username, avatar_url, created_at")
+          .eq("id", userId)
+          .single(); // returns one row or error
 
-      if (error) throw error;
-      if (!mounted) return;
+        if (error) throw error;
+        if (!mounted) return;
 
-      // Cast the row once, locally — simplest + stable for TS
-      const row = (data ?? null) as Profile | null;
+        // Cast the row once, locally — simplest + stable for TS
+        const row = (data ?? null) as Profile | null;
 
-      const p: Profile = {
-        username: row?.username ?? null,
-        avatar_url: row?.avatar_url ?? null,
-        created_at: row?.created_at ?? null,
-      };
-      setProfile(p);
-      setUsername(p.username ?? "");
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to load profile.";
-      setSaveErr(msg ?? "Failed to load profile.");
-    } finally {
-      if (mounted) setLoadingProfile(false);
-    }
-  };
+        const p: Profile = {
+          username: row?.username ?? null,
+          avatar_url: row?.avatar_url ?? null,
+          created_at: row?.created_at ?? null,
+        };
+        setProfile(p);
+        setUsername(p.username ?? "");
+      } catch (e: unknown) {
+        const msg =
+          e instanceof Error ? e.message : "Failed to load profile.";
+        setSaveErr(msg ?? "Failed to load profile.");
+      } finally {
+        if (mounted) setLoadingProfile(false);
+      }
+    };
 
-  void run();
-  return () => {
-    mounted = false;
-  };
-}, [userId]);
-
+    void run();
+    return () => {
+      mounted = false;
+    };
+  }, [userId]);
 
   const createdWhen = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -127,11 +131,14 @@ useEffect(() => {
       }
 
       setProfile((p) =>
-        p ? { ...p, username: clean } : { username: clean, avatar_url: null, created_at: null },
+        p
+          ? { ...p, username: clean }
+          : { username: clean, avatar_url: null, created_at: null },
       );
       setSaveMsg("Username updated.");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Could not update username.";
+      const msg =
+        e instanceof Error ? e.message : "Could not update username.";
       setSaveErr(msg ?? "Could not update username.");
     } finally {
       setSaveLoading(false);
@@ -160,10 +167,42 @@ useEffect(() => {
       setPw1("");
       setPw2("");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Could not update password.";
+      const msg =
+        e instanceof Error ? e.message : "Could not update password.";
       setPwErr(msg ?? "Could not update password.");
     } finally {
       setPwLoading(false);
+    }
+  };
+
+  const handleConfirmDeactivate = async () => {
+    if (!userId) return;
+    setDeleteLoading(true);
+    setDeleteErr(null);
+
+    try {
+      // Delete their profile row (RLS should restrict this to auth.uid())
+      const { error: deleteError } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", userId);
+
+      if (deleteError) throw deleteError;
+
+      // Sign out the user
+      await supabase.auth.signOut();
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("redirect-to");
+      }
+
+      // Send them back to the homepage
+      router.push("/");
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : "Failed to deactivate account.";
+      setDeleteErr(msg ?? "Failed to deactivate account.");
+      setDeleteLoading(false);
     }
   };
 
@@ -180,7 +219,9 @@ useEffect(() => {
     <div className="min-h-[80vh] flex items-center justify-center bg-blue-950 text-slate-100 px-4">
       <div className="w-full max-w-2xl">
         <div className="rounded-2xl bg-blue-900/50 border border-blue-800 shadow-xl p-6 backdrop-blur">
-          <h1 className="text-3xl font-extrabold text-center mb-2">Your Account</h1>
+          <h1 className="text-3xl font-extrabold text-center mb-2">
+            Your Account
+          </h1>
           <p className="text-slate-300 text-center mb-6">
             Manage your profile and security settings.
           </p>
@@ -194,7 +235,9 @@ useEffect(() => {
               </div>
               <p className="mt-1 text-lg break-all">{displayEmail ?? "—"}</p>
               {createdWhen && (
-                <p className="mt-2 text-xs text-slate-400">Joined: {createdWhen}</p>
+                <p className="mt-2 text-xs text-slate-400">
+                  Joined: {createdWhen}
+                </p>
               )}
             </div>
 
@@ -214,8 +257,12 @@ useEffect(() => {
                   placeholder="your_username"
                 />
               </div>
-              {saveErr && <p className="mt-2 text-sm text-red-300">{saveErr}</p>}
-              {saveMsg && <p className="mt-2 text-sm text-emerald-300">{saveMsg}</p>}
+              {saveErr && (
+                <p className="mt-2 text-sm text-red-300">{saveErr}</p>
+              )}
+              {saveMsg && (
+                <p className="mt-2 text-sm text-emerald-300">{saveMsg}</p>
+              )}
               <div className="mt-3">
                 <Button
                   type="submit"
@@ -235,7 +282,10 @@ useEffect(() => {
               <span className="text-sm">Change password</span>
             </div>
 
-            <form onSubmit={handleChangePassword} className="mt-2 grid gap-3 md:grid-cols-2">
+            <form
+              onSubmit={handleChangePassword}
+              className="mt-2 grid gap-3 md:grid-cols-2"
+            >
               <div className="flex items-center gap-2 rounded-md border border-blue-800 bg-blue-900/60 px-3">
                 <input
                   type="password"
@@ -261,8 +311,14 @@ useEffect(() => {
                 />
               </div>
 
-              {pwErr && <p className="md:col-span-2 text-sm text-red-300">{pwErr}</p>}
-              {pwMsg && <p className="md:col-span-2 text-sm text-emerald-300">{pwMsg}</p>}
+              {pwErr && (
+                <p className="md:col-span-2 text-sm text-red-300">{pwErr}</p>
+              )}
+              {pwMsg && (
+                <p className="md:col-span-2 text-sm text-emerald-300">
+                  {pwMsg}
+                </p>
+              )}
 
               <div className="md:col-span-2">
                 <Button
@@ -274,6 +330,71 @@ useEffect(() => {
                 </Button>
               </div>
             </form>
+          </div>
+
+          {/* Help & Support */}
+          <div className="mt-6 flex justify-end">
+            <Button
+              type="button"
+              onClick={() => router.push("/account/help")}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              Help &amp; Support / Tickets
+            </Button>
+          </div>
+
+          {/* Danger zone: deactivate account */}
+          <div className="mt-8 rounded-lg border border-red-800 bg-red-950/40 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="h-5 w-5 text-red-400" />
+              <h2 className="text-sm font-semibold text-red-200">
+                Deactivate account
+              </h2>
+            </div>
+            <p className="text-xs text-red-100/80 mb-3">
+              Deactivating your account will remove your profile data from
+              Animaru and sign you out. This action cannot be undone.
+            </p>
+
+            {deleteErr && (
+              <p className="mb-2 text-xs text-red-300">{deleteErr}</p>
+            )}
+
+            {!showDeleteConfirm ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="border-red-700 text-red-200 hover:bg-red-900/40 hover:text-red-100"
+              >
+                Deactivate my account
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-red-100/90">
+                  Are you sure? This will permanently remove your profile and
+                  sign you out.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleConfirmDeactivate}
+                    disabled={deleteLoading}
+                    className="bg-red-700 hover:bg-red-600 disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {deleteLoading ? "Deactivating…" : "Yes, deactivate my account"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="border-slate-500 text-slate-200 hover:bg-slate-800/60"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Advanced (optional): show user id */}

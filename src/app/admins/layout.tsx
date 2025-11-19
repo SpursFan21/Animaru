@@ -1,6 +1,5 @@
 //src\app\admins\layout.tsx
 
-// src/app/admins/layout.tsx
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";

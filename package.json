@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@heroicons/react": "^2.2.0",
     "@mux/mux-player-react": "^3.5.3",
     "@prisma/client": "^6.5.0",
     "@radix-ui/react-slot": "^1.2.3",

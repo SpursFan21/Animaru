@@ -1,4 +1,4 @@
-//src\app\api\auth\route.ts
+// Animaru/src/app/api/auth/route.ts
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       | "SIGNED_OUT"
       | "TOKEN_REFRESHED"
       | "USER_UPDATED"
+      | "BOOTSTRAP"
       | string;
     session: any | null;
   };
@@ -60,5 +61,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-

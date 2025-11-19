@@ -24,7 +24,7 @@ const sections = [
   {
     title: "Support",
     links: [
-      { label: "Help Center", href: "/help" },
+      { label: "Help & Support", href: "/account/help" },
       { label: "Contact", href: "/contact" },
       { label: "Report issue", href: "/issues" },
     ],
