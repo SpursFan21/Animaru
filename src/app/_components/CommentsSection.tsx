@@ -1,4 +1,5 @@
-// src/app/_components/CommentsSection.tsx
+//Animaru\src\app\_components\CommentsSection.tsx
+
 "use client";
 
 import useSWR from "swr";
@@ -70,9 +71,12 @@ export default function CommentsSection({
   username,
   avatarUrl,
 }: CommentsProps) {
-  const { data, mutate, isLoading } = useSWR<ApiListResponse, Error, [string, string | null]>(
-    [`/api/comments/${encodeURIComponent(threadId)}`, userId],
-    ([u, uid]) => fetcher(u, uid ?? undefined)
+  const { data, mutate, isLoading } = useSWR<
+    ApiListResponse,
+    Error,
+    [string, string | null]
+  >([`/api/comments/${encodeURIComponent(threadId)}`, userId], ([u, uid]) =>
+    fetcher(u, uid ?? undefined),
   );
 
   const flat: CommentNode[] = useMemo(() => {
@@ -85,9 +89,13 @@ export default function CommentsSection({
           : String(d._id);
 
       const created =
-        typeof d.createdAt === "string" ? d.createdAt : new Date(d.createdAt).toISOString();
+        typeof d.createdAt === "string"
+          ? d.createdAt
+          : new Date(d.createdAt).toISOString();
       const updated =
-        typeof d.updatedAt === "string" ? d.updatedAt : new Date(d.updatedAt).toISOString();
+        typeof d.updatedAt === "string"
+          ? d.updatedAt
+          : new Date(d.updatedAt).toISOString();
 
       return {
         _id: id,
@@ -164,56 +172,73 @@ export default function CommentsSection({
   }
 
   return (
-    <div className="mt-8">
-      <h2 className="text-xl font-bold text-slate-100 mb-3">Comments</h2>
+    <section className="mt-10">
+      {/* Outer container card */}
+      <div className="rounded-2xl border border-blue-800/80 bg-gradient-to-b from-blue-950/90 to-slate-950/90 shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-blue-900/80">
+          <h2 className="text-lg sm:text-xl font-semibold text-slate-50">
+            Comments
+          </h2>
+          {tree.length > 0 && (
+            <span className="text-xs text-slate-400">
+              {tree.length} top-level thread{tree.length === 1 ? "" : "s"}
+            </span>
+          )}
+        </div>
 
-      {/* root composer */}
-      <div className="rounded-lg border border-blue-900 p-3 bg-blue-950/40">
-        <textarea
-          value={newText}
-          onChange={(e) => setNewText(e.target.value)}
-          placeholder={userId ? "Write a comment…" : "Sign in to comment"}
-          className="w-full rounded-md bg-blue-950 border border-blue-900 p-2 outline-none focus:border-sky-500"
-          rows={3}
-          disabled={!userId}
-        />
-        <div className="mt-2 flex justify-end">
-          <button
-            onClick={async () => {
-              const trimmed = newText.trim();
-              if (trimmed.length === 0) return;
-              await submit(trimmed, null);
-              setNewText("");
-            }}
-            className="px-3 py-1.5 rounded-md bg-sky-600 text-white disabled:opacity-50"
-            disabled={!userId || newText.trim().length === 0}
-          >
-            Post
-          </button>
+        <div className="px-4 sm:px-5 pb-4 sm:pb-5">
+          {/* root composer */}
+          <div className="mt-4 rounded-xl border border-blue-800/80 bg-blue-900/70 shadow-inner">
+            <textarea
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              placeholder={userId ? "Write a comment…" : "Sign in to comment"}
+              className="w-full rounded-t-xl bg-slate-950/80 border-b border-blue-800 px-3 py-2.5 text-sm outline-none placeholder:text-slate-500 focus:border-sky-500"
+              rows={3}
+              disabled={!userId}
+            />
+            <div className="px-3 py-2 flex items-center justify-end">
+              <button
+                onClick={async () => {
+                  const trimmed = newText.trim();
+                  if (trimmed.length === 0) return;
+                  await submit(trimmed, null);
+                  setNewText("");
+                }}
+                className="px-3 py-1.5 rounded-lg bg-sky-600 text-sm font-medium text-white shadow-sm hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!userId || newText.trim().length === 0}
+              >
+                Post
+              </button>
+            </div>
+          </div>
+
+          {/* list */}
+          <div className="mt-5">
+            {isLoading ? (
+              <p className="text-slate-300 text-sm">Loading…</p>
+            ) : tree.length === 0 ? (
+              <p className="text-slate-400 text-sm">
+                Be the first to comment.
+              </p>
+            ) : (
+              <ul className="space-y-4">
+                {tree.map((n) => (
+                  <CommentItem
+                    key={n._id}
+                    node={n}
+                    onReply={submit}
+                    onVote={vote}
+                    depth={0}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
-
-      {/* list */}
-      <div className="mt-4">
-        {isLoading ? (
-          <p className="text-slate-300">Loading…</p>
-        ) : tree.length === 0 ? (
-          <p className="text-slate-400">Be the first to comment.</p>
-        ) : (
-          <ul className="space-y-4">
-            {tree.map((n) => (
-              <CommentItem
-                key={n._id}
-                node={n}
-                onReply={submit}
-                onVote={vote}
-                depth={0}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -234,29 +259,40 @@ function CommentItem({
   const [text, setText] = useState("");
   const canReply = depth < 6;
 
+  const indentClass =
+    depth > 0 ? "ml-4 sm:ml-6 border-l border-blue-900/80 pl-3 sm:pl-4" : "";
+
   return (
-    <li>
-      <div className="flex gap-3">
-        <div className="flex flex-col items-center text-slate-400">
-          <button className="px-1" onClick={() => onVote(node._id, 1)}>
+    <li className={indentClass}>
+      <div className="rounded-xl border border-blue-900/80 bg-blue-950/60 px-3 py-2.5 sm:px-4 sm:py-3 flex gap-3">
+        <div className="flex flex-col items-center text-slate-400 pt-1">
+          <button
+            className="px-1 hover:text-sky-300 text-sm leading-none"
+            onClick={() => onVote(node._id, 1)}
+          >
             ▲
           </button>
-          <div className="text-xs text-slate-300">{node.score}</div>
-          <button className="px-1" onClick={() => onVote(node._id, -1)}>
+          <div className="text-[11px] text-slate-300">{node.score}</div>
+          <button
+            className="px-1 hover:text-sky-300 text-sm leading-none"
+            onClick={() => onVote(node._id, -1)}
+          >
             ▼
           </button>
         </div>
         <div className="flex-1">
-          <div className="text-sm text-slate-300">
+          <div className="text-xs sm:text-sm text-slate-300">
             <span className="font-semibold text-slate-100">
               {node.username ?? "User"}
             </span>
-            <span className="ml-2 text-xs text-slate-400">
+            <span className="ml-2 text-[11px] text-slate-500">
               {new Date(node.createdAt).toLocaleString()}
             </span>
           </div>
-          <div className="mt-1 text-slate-200 whitespace-pre-wrap">{node.content}</div>
-          <div className="mt-1 text-xs text-slate-400 flex gap-3">
+          <div className="mt-1 text-sm text-slate-100 whitespace-pre-wrap">
+            {node.content}
+          </div>
+          <div className="mt-1 text-[11px] sm:text-xs text-slate-400 flex gap-3">
             {canReply && (
               <button
                 className="hover:text-sky-400"
@@ -279,12 +315,12 @@ function CommentItem({
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Write a reply…"
-                className="w-full rounded-md bg-blue-950 border border-blue-900 p-2 outline-none focus:border-sky-500"
+                className="w-full rounded-lg bg-slate-950/80 border border-blue-900 px-3 py-2 text-sm outline-none placeholder:text-slate-500 focus:border-sky-500"
                 rows={2}
               />
               <div className="mt-2 flex gap-2">
                 <button
-                  className="px-3 py-1.5 rounded-md bg-sky-600 text-white disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-md bg-sky-600 text-xs sm:text-sm font-medium text-white disabled:opacity-50"
                   disabled={text.trim().length === 0}
                   onClick={async () => {
                     const trimmed = text.trim();
@@ -297,7 +333,7 @@ function CommentItem({
                   Submit
                 </button>
                 <button
-                  className="px-3 py-1.5 rounded-md border border-blue-800"
+                  className="px-3 py-1.5 rounded-md border border-blue-800 text-xs sm:text-sm text-slate-200"
                   onClick={() => setShowReply(false)}
                 >
                   Cancel
@@ -307,7 +343,7 @@ function CommentItem({
           )}
 
           {node.children && node.children.length > 0 && (
-            <ul className="mt-3 ml-5 border-l border-blue-900 pl-4 space-y-3">
+            <ul className="mt-3 space-y-3">
               {node.children.map((c) => (
                 <CommentItem
                   key={c._id}
