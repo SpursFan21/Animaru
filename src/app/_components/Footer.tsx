@@ -24,9 +24,12 @@ const sections = [
   {
     title: "Support",
     links: [
+      // Tickets + help centre
       { label: "Help & Support", href: "/account/help" },
-      { label: "Contact", href: "/contact" },
-      { label: "Report issue", href: "/issues" },
+      // FAQ page created at /help
+      { label: "FAQ", href: "/help" },
+      // Report issue goes to the same ticket page as Help & Support
+      { label: "Report issue", href: "/account/help" },
     ],
   },
   {
@@ -84,8 +87,12 @@ export function Footer() {
           </p>
 
           <div className="flex items-center gap-4 text-sm">
-            <Link href="/privacy" className="hover:text-sky-300">Privacy</Link>
-            <Link href="/terms" className="hover:text-sky-300">Terms</Link>
+            <Link href="/privacy" className="hover:text-sky-300">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-sky-300">
+              Terms
+            </Link>
             <a
               href="#top"
               className="rounded-md px-3 py-1 bg-blue-900 hover:bg-blue-800 text-slate-100"
