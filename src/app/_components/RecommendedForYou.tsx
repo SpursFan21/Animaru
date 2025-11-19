@@ -2,9 +2,9 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { supabase } from "../../utils/supabaseClient";
+import type { AnimeForModal } from "./AnimeModal";
 
 type AnimeRow = {
   id: string;
@@ -13,7 +13,13 @@ type AnimeRow = {
   synopsis: string | null;
   cover_path: string | null;
   genres: string[] | null;
+  season: string | null;
+  year: number | null;
   updated_at: string | null;
+};
+
+type RecommendedForYouProps = {
+  onSelect?: (anime: AnimeForModal) => void;
 };
 
 function coverUrl(path?: string | null) {
@@ -28,7 +34,7 @@ function coverUrl(path?: string | null) {
  * 3) fetch candidates that overlap any liked genres and are NOT in rated set
  * 4) score by sum of liked-genre weights, tie-break by recency and title
  */
-export default function RecommendedForYou() {
+export default function RecommendedForYou({ onSelect }: RecommendedForYouProps) {
   const [userId, setUserId] = useState<string | null>(null);
   const [items, setItems] = useState<AnimeRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +65,7 @@ export default function RecommendedForYou() {
           .select("anime_id, rating")
           .eq("user_id", u.id)
           .gte("rating", 4) // 4–5 stars
-          .limit(500)       // safety cap
+          .limit(500) // safety cap
           .returns<{ anime_id: string; rating: number }[]>();
 
         if (rateErr) throw rateErr;
@@ -102,7 +108,9 @@ export default function RecommendedForYou() {
         // --- 3) candidates: any overlap with liked genres, exclude rated set
         const { data: candidates, error: candErr } = await supabase
           .from("anime")
-          .select("id, slug, title, synopsis, cover_path, genres, updated_at")
+          .select(
+            "id, slug, title, synopsis, cover_path, genres, season, year, updated_at"
+          )
           .overlaps("genres", likedGenres)
           .not("id", "in", `(${Array.from(ratedAnimeIds).join(",") || "NULL"})`)
           .order("updated_at", { ascending: false })
@@ -131,7 +139,8 @@ export default function RecommendedForYou() {
         const top = scored.slice(0, 12).map((s) => s.row);
         if (mounted) setItems(top);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to load recommendations.";
+        const msg =
+          e instanceof Error ? e.message : "Failed to load recommendations.";
         if (mounted) setErr(msg), setItems([]);
       } finally {
         if (mounted) setLoading(false);
@@ -174,10 +183,24 @@ export default function RecommendedForYou() {
           <ul className="grid gap-6 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
             {items.map((a) => {
               const url = coverUrl(a.cover_path);
+
+              const payload: AnimeForModal = {
+                id: a.id,
+                slug: a.slug,
+                title: a.title,
+                synopsis: a.synopsis,
+                cover_path: a.cover_path,
+                genres: a.genres,
+                season: a.season,
+                year: a.year,
+                episodes: null,
+              };
+
               return (
                 <li key={a.id} className="h-full">
-                  <Link
-                    href={`/anime/${a.slug}`}
+                  <button
+                    type="button"
+                    onClick={() => onSelect?.(payload)}
                     className="group block h-full w-full rounded-lg overflow-hidden border border-blue-800 bg-blue-900/60 hover:border-sky-500 transition flex flex-col text-left"
                   >
                     <div className="relative w-full aspect-[2/3]">
@@ -200,7 +223,7 @@ export default function RecommendedForYou() {
                         {a.title}
                       </h3>
                     </div>
-                  </Link>
+                  </button>
                 </li>
               );
             })}

@@ -233,8 +233,14 @@ export default function Home() {
               </div>
             </div>
 
+
             {/* Recommended for you (keeps full 7xl width) */}
-            <RecommendedForYou />
+            <RecommendedForYou
+              onSelect={(a) => {
+                setModalAnime(a);
+                setModalOpen(true);
+              }}
+            />
           </div>
 
           {/* SIDEBAR (fixed 320px lane, desktop only) */}
