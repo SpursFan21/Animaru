@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 
-import { Users, Ticket, Subtitles, Upload, Edit3, Database, Wrench, Shield, FileText, Video, Star } from "lucide-react";
+import { Users, Ticket, Subtitles, Upload, Edit3, Database, Wrench, Shield, FileText, Video, Star, MessageSquare } from "lucide-react";
 
 type Tile = {
   href: string;
@@ -21,6 +21,7 @@ const TILES: Tile[] = [
   { href: "/admins/upload", title: "Upload Anime",    desc: "Create entries, upload covers/banners",        icon: Upload },
   { href: "/admins/manage", title: "Update Anime",    desc: "Edit metadata, seasons, anime details, images",             icon: Edit3 },
   { href: "/admins/episodes", title: "Manage Episodes", desc: "Create & edit, upload to Mux", icon: Video },
+  { href: "/admins/comments",  title: "Moderate Comments",  desc: "Review & remove episode comments",             icon: MessageSquare },
   { href: "/admins/banners", title: "Banner Manager", desc: "Pick 5, order 1–5", icon: Video },
   { href: "/admins/popular", title: "Popular Manager", desc: "Pick up to 10 covers for the homepage grid", icon: Star },
   { href: "/admins/storage",   title: "Storage",            desc: "Covers, banners, subtitles buckets",           icon: Database },

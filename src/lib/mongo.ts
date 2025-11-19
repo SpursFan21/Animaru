@@ -26,16 +26,22 @@ export async function getDb(): Promise<Db> {
 }
 
 export type CommentDoc = {
-  _id?: ObjectId | string;       // replace `any` with ObjectId | string
-  threadId: string;              // `${animeId}:${episodeNumber}`
-  parentId: string | null;       // parent ObjectId as string | null
+  _id?: ObjectId | string;
+  threadId: string;
+  parentId: string | null;
   path: string[];
   content: string;
-  userId: string;                // Supabase auth uid
+  userId: string;
   username?: string | null;
   avatarUrl?: string | null;
   score: number;
-  votes: Record<string, 1 | -1>; // userId -> 1/-1
+  votes: Record<string, 1 | -1>;
   createdAt: Date;
   updatedAt: Date;
 };
+
+/** helper collection getter */
+export async function getCommentsCollection() {
+  const db = await getDb();
+  return db.collection<CommentDoc>("comments");
+}
